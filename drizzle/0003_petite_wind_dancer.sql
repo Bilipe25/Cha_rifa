@@ -1,0 +1,1 @@
+ALTER TABLE `draws` ADD `prize_amount_cents` integer;

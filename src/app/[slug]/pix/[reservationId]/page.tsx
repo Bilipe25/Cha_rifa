@@ -14,7 +14,7 @@ export default async function PixPage({ params }: { params: Promise<{ slug: stri
   const reservation = await getReservation(slug, reservationId);
   if (!reservation) notFound();
   const qr = await QRCode.toDataURL(reservation.pixPayload, { errorCorrectionLevel: 'M', margin: 1, width: 360 });
-  return <ThemeFrame themeKey={raffle.themeKey} kind="guest">
+  return <ThemeFrame theme={getTheme(raffle.themeKey)!} variant="guest">
     <h1 className="sr-only">{raffle.title}</h1>
     <PixPayment slug={slug} reservationId={reservationId} numbers={reservation.numbers}
       totalCents={reservation.totalCents} payload={reservation.pixPayload} qr={qr} status={reservation.status}

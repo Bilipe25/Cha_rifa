@@ -39,6 +39,8 @@ export function PixPayment({ slug, reservationId, numbers, totalCents, payload, 
     <div className="panel-heading"><h2>{status === 'paid' ? 'Pagamento confirmado' : reported ? 'Pagamento informado' : 'Pix gerado'}</h2><p>{reported ? status === 'paid' ? 'Obrigada por participar!' : 'Prontinho! Agora a mamãe vai confirmar o seu pagamento.' : 'Copie o código abaixo para realizar o pagamento'}</p></div>
     <div className="pix-recap"><span>{numbers.length} {numbers.length === 1 ? 'número' : 'números'} · {numbers.map(formatNumber).join(' · ')}</span><strong>{formatMoney(totalCents)}</strong></div>
     {status === 'pending' && expiresAt && <p className="pix-deadline">Esta reserva fica guardada até {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Fortaleza' }).format(new Date(expiresAt))}. Depois desse prazo, os números podem ser liberados.</p>}
+    {/* O QR Code já é uma imagem gerada em memória para esta reserva. */}
+    {/* eslint-disable-next-line @next/next/no-img-element */}
     <img className="pix-qr" src={qr} alt="QR Code para pagar esta reserva por Pix" width={160} height={160}/>
     <label className="pix-code-label" htmlFor="pix-code">Pix Copia e Cola</label>
     <textarea id="pix-code" className="pix-code" readOnly value={payload} onFocus={event => event.currentTarget.select()} rows={2}/>

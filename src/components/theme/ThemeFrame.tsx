@@ -1,14 +1,32 @@
 import Image from 'next/image';
-import { getTheme } from '@/config/themes';
+import type { CSSProperties, ReactNode } from 'react';
+import type { FrameVariant, RaffleTheme } from '@/config/themes';
 
-export function ThemeFrame({ themeKey, kind, children, className = '' }: {
-  themeKey: string; kind: 'home' | 'guest' | 'admin'; children: React.ReactNode; className?: string;
+type FrameStyle = CSSProperties & {
+  '--frame-aspect-ratio': string;
+  '--frame-top': string;
+  '--frame-left': string;
+  '--frame-right': string;
+  '--frame-bottom': string;
+  '--frame-compact-left'?: string;
+  '--frame-compact-right'?: string;
+};
+
+export function ThemeFrame({ theme, variant, children, className = '' }: {
+  theme: RaffleTheme; variant: FrameVariant; children: ReactNode; className?: string;
 }) {
-  const theme = getTheme(themeKey);
-  if (!theme) return null;
-  const src = kind === 'home' ? theme.homeFrame : kind === 'guest' ? theme.guestFrame : theme.adminFrame;
-  return <div className={`theme-frame theme-frame--${kind} ${className}`}>
-    <Image src={src} fill alt="" sizes="(max-width: 480px) 100vw, 480px" priority className="frame-art" />
-    <main className={`frame-content frame-content--${kind}`}>{children}</main>
+  const layout = theme.layout[variant];
+  const style: FrameStyle = {
+    '--frame-aspect-ratio': theme.frameAspectRatio,
+    '--frame-top': layout.top,
+    '--frame-left': layout.left,
+    '--frame-right': layout.right,
+    '--frame-bottom': layout.bottom,
+    '--frame-compact-left': theme.compactLayout?.[variant]?.left,
+    '--frame-compact-right': theme.compactLayout?.[variant]?.right,
+  };
+  return <div className={`theme-frame theme-frame--${variant} ${className}`} style={style}>
+    <Image src={theme.frames[variant]} fill alt="" sizes="(max-width: 480px) 100vw, 480px" priority className="frame-art" />
+    <main className={`frame-content frame-content--${variant}`}>{children}</main>
   </div>;
 }

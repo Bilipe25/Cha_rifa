@@ -40,3 +40,11 @@ export async function consumeRateLimits(rules: { key: string; limit: number; win
     }
   }
 }
+
+export async function cleanupExpiredRateLimitBuckets(now = Date.now()) {
+  const result = await client.execute({
+    sql: 'DELETE FROM rate_limit_buckets WHERE resets_at < ?',
+    args: [now],
+  });
+  return result.rowsAffected;
+}

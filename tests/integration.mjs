@@ -12,6 +12,7 @@ const dbFile = `integration-${randomUUID()}.db`;
 const url = `file:${dbFile}`;
 const adminPassword = 'DisposableTestPass123!';
 const sessionSecret = 'DisposableSessionSecretForIntegrationTests123456789';
+const cronSecret = 'DisposableCronSecretForIntegrationTests123';
 const slug = 'maria-antonella';
 const raffleId = randomUUID();
 const client = createClient({ url });
@@ -32,7 +33,7 @@ async function request(base, path, method = 'GET', data, cookie, extraHeaders = 
     redirect: 'manual',
   });
   let body;
-  if (response.headers.get('content-type')?.includes('application/json')) body = await response.json();
+  if (response.headers.get('content-type')?.includes('json')) body = await response.json();
   return { response, body };
 }
 
@@ -63,7 +64,8 @@ async function main() {
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
   server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-p', String(port)], {
-    cwd: process.cwd(), env: { ...process.env, TURSO_DATABASE_URL: url, TURSO_AUTH_TOKEN: '', SESSION_SECRET: sessionSecret },
+    cwd: process.cwd(), env: { ...process.env, TURSO_DATABASE_URL: url, TURSO_AUTH_TOKEN: '', SESSION_SECRET: sessionSecret,
+      CRON_SECRET: cronSecret, DEFAULT_RAFFLE_SLUG: slug },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let serverLog = '';
@@ -103,6 +105,88 @@ async function main() {
   assert.equal(login.response.status, 200);
   const cookie = login.response.headers.get('set-cookie')?.split(';')[0];
   assert.ok(cookie);
+  assert.match(cookie, /^charifa_session_maria-antonella=/);
+
+  const helenaId = randomUUID();
+  const passwordHash = (await client.execute({ sql: 'SELECT admin_password_hash FROM raffles WHERE id = ?', args: [raffleId] })).rows[0].admin_password_hash;
+  await client.execute({
+    sql: `INSERT INTO raffles (id, slug, baby_name, title, theme_key, draw_date, price_per_number_cents, total_numbers,
+          prize_one_cents, prize_two_cents, pix_key, pix_receiver_name, pix_receiver_city, admin_password_hash, status, created_at)
+          VALUES (?, 'helena', 'Helena', 'Chá Rifa da Helena', ?, '2026-12-31', 700, 3,
+          12000, 6000, '123e4567-e89b-12d3-a456-426614174000', 'TESTE CHA RIFA', 'FORTALEZA', ?, 'active', ?)`,
+    args: [helenaId, slug, passwordHash, new Date().toISOString()],
+  });
+  const helenaLogin = await request(base, '/api/admin/helena/login', 'POST', { password: adminPassword });
+  assert.equal(helenaLogin.response.status, 200);
+  const helenaCookie = helenaLogin.response.headers.get('set-cookie')?.split(';')[0];
+  assert.match(helenaCookie, /^charifa_session_helena=/);
+  const bothCookies = `${cookie}; ${helenaCookie}`;
+  const mariaAdmin = await request(base, `/admin/${slug}`, 'GET', undefined, bothCookies);
+  assert.equal(mariaAdmin.response.status, 200);
+  const adminHtml = await mariaAdmin.response.text();
+  assert.ok(adminHtml.includes('Compartilhar rifa'), 'painel exibe compartilhamento');
+  assert.ok(adminHtml.includes('Configurações da rifa'), 'painel exibe configurações');
+  assert.ok(adminHtml.includes('noindex'), 'painel não deve ser indexado');
+  assert.equal((await request(base, '/admin/helena', 'GET', undefined, bothCookies)).response.status, 200, 'duas sessões coexistem');
+  assert.equal((await request(base, '/api/admin/helena/settings', 'PATCH', {
+    drawDate: '2026-12-31', prizeOneCents: 12000, prizeTwoCents: 6000, pricePerNumberCents: 700, totalNumbers: 3,
+  }, cookie)).response.status, 401, 'sessão de uma rifa não altera outra');
+  const manifest = await request(base, '/admin/helena/manifest.webmanifest');
+  assert.equal(manifest.response.status, 200);
+  assert.equal(manifest.body.name, 'Painel - Chá Rifa da Helena');
+  assert.equal(manifest.body.start_url, '/admin/helena');
+  assert.equal(manifest.body.scope, '/admin/helena');
+  assert.equal(manifest.body.theme_color, '#e85c84');
+  assert.equal(manifest.body.icons[0].src, '/themes/maria-antonella/icon-192.png');
+  const helenaHome = await request(base, '/helena');
+  const helenaHtml = await helenaHome.response.text();
+  assert.ok(helenaHtml.includes('Chá Rifa da Helena'), 'metadata vem da rifa Helena');
+  assert.ok(helenaHtml.includes('share.jpg'), 'Open Graph usa a arte do tema');
+  assert.ok(/property="og:image" content="https?:\/\//.test(helenaHtml), 'imagem Open Graph é absoluta');
+  assert.ok(!helenaHtml.includes('INSTALAR PAINEL'), 'convidados não recebem convite de instalação');
+  assert.equal((await request(base, '/')).response.headers.get('location'), `/${slug}`);
+
+  const updateSettings = data => request(base, `/api/admin/${slug}/settings`, 'PATCH', data, cookie);
+  const initialSettings = { drawDate: '2026-12-12', prizeOneCents: 11000, prizeTwoCents: 6000,
+    pricePerNumberCents: 500, totalNumbers: 250 };
+  assert.equal((await updateSettings({ ...initialSettings, pricePerNumberCents: -1 })).response.status, 400);
+  assert.equal((await updateSettings({ ...initialSettings, drawDate: '2026-02-31' })).response.status, 400);
+  assert.equal((await updateSettings({ ...initialSettings, totalNumbers: 1001 })).response.status, 400);
+  assert.equal((await updateSettings(initialSettings)).response.status, 200);
+  assert.equal(Number((await client.execute({ sql: 'SELECT COUNT(*) AS total FROM raffle_numbers WHERE raffle_id = ? AND number > 200', args: [raffleId] })).rows[0].total), 50);
+  const high = await reserve(220, '79999990020');
+  assert.equal(high.response.status, 200);
+  const reductionBlocked = await updateSettings({ ...initialSettings, totalNumbers: 200 });
+  assert.equal(reductionBlocked.response.status, 409);
+  assert.match(reductionBlocked.body.error, /220/);
+  assert.equal((await request(base, `/api/admin/${slug}/reservation/${high.body.reservationId}`, 'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
+  assert.equal((await updateSettings({ ...initialSettings, totalNumbers: 200 })).response.status, 200);
+  assert.equal((await client.execute({ sql: 'SELECT status FROM raffle_numbers WHERE raffle_id = ? AND number = 220', args: [raffleId] })).rows[0].status, 'retired');
+  assert.equal((await updateSettings(initialSettings)).response.status, 200);
+  assert.equal((await client.execute({ sql: 'SELECT status FROM raffle_numbers WHERE raffle_id = ? AND number = 220', args: [raffleId] })).rows[0].status, 'available');
+  const oldPrice = await reserve(5, '79999990005');
+  assert.equal(oldPrice.response.status, 200);
+  assert.equal(Number((await client.execute({ sql: 'SELECT total_cents FROM reservations WHERE id = ?', args: [oldPrice.body.reservationId] })).rows[0].total_cents), 500);
+  assert.equal((await updateSettings({ ...initialSettings, pricePerNumberCents: 600 })).response.status, 200);
+  const newPrice = await reserve(6, '79999990006');
+  assert.equal(newPrice.response.status, 200);
+  const priceRows = (await client.execute({ sql: 'SELECT id, total_cents, pix_payload FROM reservations WHERE id IN (?, ?)', args: [oldPrice.body.reservationId, newPrice.body.reservationId] })).rows;
+  assert.equal(Number(priceRows.find(row => row.id === oldPrice.body.reservationId).total_cents), 500);
+  assert.equal(Number(priceRows.find(row => row.id === newPrice.body.reservationId).total_cents), 600);
+  assert.match(String(priceRows.find(row => row.id === oldPrice.body.reservationId).pix_payload), /54045\.00/);
+  assert.match(String(priceRows.find(row => row.id === newPrice.body.reservationId).pix_payload), /54046\.00/);
+  for (const item of [oldPrice, newPrice]) {
+    assert.equal((await request(base, `/api/admin/${slug}/reservation/${item.body.reservationId}`, 'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
+  }
+  const homeAfterSettings = await request(base, `/${slug}`);
+  assert.ok(/R\$\s?6,00/.test(await homeAfterSettings.response.text()), 'home exibe o preço novo');
+
+  await client.execute({ sql: `INSERT INTO rate_limit_buckets (key, hits, resets_at) VALUES ('expired-test', 1, 1)` });
+  assert.equal((await request(base, '/api/internal/cleanup-rate-limits')).response.status, 401);
+  assert.equal((await request(base, '/api/internal/cleanup-rate-limits', 'GET', undefined, undefined,
+    { Authorization: `Bearer ${cronSecret}` })).response.status, 200);
+  assert.equal(Number((await client.execute({ sql: `SELECT COUNT(*) AS total FROM rate_limit_buckets WHERE key = 'expired-test'` })).rows[0].total), 0);
+
   const resolved = await request(base, `/api/admin/${slug}/late-payment/${first.body.reservationId}`, 'POST', { note: 'Reembolso combinado com a pessoa' }, cookie);
   assert.equal(resolved.response.status, 200);
 
@@ -132,6 +216,14 @@ async function main() {
   assert.equal((await publicResult.response.text()).includes('79999990002'), false, 'resultado público não deve conter telefone');
   const draws = (await client.execute({ sql: 'SELECT winning_number FROM draws ORDER BY prize_position' })).rows.map(row => Number(row.winning_number));
   assert.deepEqual(draws.sort((a, b) => a - b), [2, 3]);
+  const prizeSnapshots = (await client.execute({ sql: 'SELECT prize_amount_cents FROM draws ORDER BY prize_position' })).rows.map(row => Number(row.prize_amount_cents));
+  assert.deepEqual(prizeSnapshots, [11000, 6000]);
+  await client.execute({ sql: 'UPDATE raffles SET prize_one_cents = 999, prize_two_cents = 999 WHERE id = ?', args: [raffleId] });
+  const snapshottedResult = await request(base, `/${slug}/resultado`);
+  const resultHtml = await snapshottedResult.response.text();
+  assert.ok(/R\$\s?110,00/.test(resultHtml), 'resultado conserva o primeiro prêmio');
+  assert.ok(/R\$\s?60,00/.test(resultHtml), 'resultado conserva o segundo prêmio');
+  assert.equal((await updateSettings(initialSettings)).response.status, 409, 'configurações ficam protegidas após sorteio');
   assert.equal((await reserve(5, '79999990005')).response.status, 409, 'não aceita reservas após sorteio');
   assert.equal((await request(base, `/api/admin/${slug}/reservation/${second.body.reservationId}`, 'PATCH', { status: 'pending' }, cookie)).response.status, 409, 'não altera elegibilidade após sorteio');
   assert.equal((await request(base, `/api/admin/${slug}/draw`, 'POST', undefined, cookie)).response.status, 409, 'não repete sorteio');

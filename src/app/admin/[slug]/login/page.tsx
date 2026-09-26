@@ -12,5 +12,5 @@ export default async function LoginPage({ params }: { params: Promise<{ slug: st
   const raffle = await getRaffle(slug);
   if (!raffle || !getTheme(raffle.themeKey)) notFound();
   if (await isAdmin(slug)) redirect(`/admin/${slug}`);
-  return <ThemeFrame kind="admin" themeKey={raffle.themeKey}><AdminLogin slug={slug}/></ThemeFrame>;
+  return <ThemeFrame variant="admin" theme={getTheme(raffle.themeKey)!}><AdminLogin slug={slug}/></ThemeFrame>;
 }

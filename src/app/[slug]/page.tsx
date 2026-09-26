@@ -6,14 +6,35 @@ import { getTheme } from '@/config/themes';
 import { formatDrawDate, formatMoney } from '@/lib/currency';
 import { getRaffle } from '@/lib/raffle';
 import { MyNumbersEntry } from '@/components/raffle/MyNumbersEntry';
+import type { Metadata } from 'next';
+import { publicRafflePath } from '@/lib/app-url';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const raffle = await getRaffle(slug);
+  const theme = raffle && getTheme(raffle.themeKey);
+  if (!raffle || !theme) return {};
+  const title = raffle.title.replace(/^Chá Rifa\b/i, 'Chá-Rifa');
+  const description = `Participe do ${title} e escolha seus números favoritos 💕`;
+  return {
+    title: raffle.title,
+    description,
+    alternates: { canonical: publicRafflePath(slug) },
+    openGraph: {
+      title: raffle.title, description, type: 'website', url: publicRafflePath(slug),
+      images: [{ url: theme.shareImage, width: 1200, height: 630, alt: raffle.title }],
+    },
+    twitter: { card: 'summary_large_image', title: raffle.title, description, images: [theme.shareImage] },
+  };
+}
 
 export default async function HomePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const raffle = await getRaffle(slug);
   if (!raffle || !getTheme(raffle.themeKey)) notFound();
-  return <ThemeFrame themeKey={raffle.themeKey} kind="home">
+  return <ThemeFrame theme={getTheme(raffle.themeKey)!} variant="home">
     <h1 className="sr-only">{raffle.title}</h1>
     <p className="home-intro">Participe escolhendo seus números favoritos <span aria-hidden="true">♥</span></p>
     <div className="date-card"><Icon name="calendar" size={30} /><span>Data do sorteio<strong>{formatDrawDate(raffle.drawDate)}</strong></span></div>

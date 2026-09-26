@@ -5,9 +5,11 @@ import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { raffles } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { verifyPassword } from './password';
 
-const cookieName = 'charifa_session';
+export function getAdminCookieName(slug: string) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error('Identificador da rifa inválido');
+  return `charifa_session_${slug}`;
+}
 
 export { verifyPassword } from './password';
 
@@ -21,15 +23,15 @@ function signature(value: string) { return createHmac('sha256', secret()).update
 export async function setAdminSession(slug: string, sessionVersion: number) {
   const expires = Date.now() + 24 * 60 * 60 * 1000;
   const value = `${slug}.${expires}.${sessionVersion}`;
-  (await cookies()).set(cookieName, `${value}.${signature(value)}`, {
+  (await cookies()).set(getAdminCookieName(slug), `${value}.${signature(value)}`, {
     httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', expires: new Date(expires),
   });
 }
 
-export async function clearAdminSession() { (await cookies()).delete(cookieName); }
+export async function clearAdminSession(slug: string) { (await cookies()).delete(getAdminCookieName(slug)); }
 
 export async function isAdmin(slug: string) {
-  const token = (await cookies()).get(cookieName)?.value;
+  const token = (await cookies()).get(getAdminCookieName(slug))?.value;
   if (!token) return false;
   const [savedSlug, expires, version, mac] = token.split('.');
   if (savedSlug !== slug || !expires || !version || !mac || Number(expires) < Date.now()) return false;

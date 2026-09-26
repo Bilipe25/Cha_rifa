@@ -18,7 +18,7 @@ npm run db:seed
 npm run dev
 ```
 
-Antes de publicar uma atualização, execute `npm run typecheck`, `npm run build` e `npm run test:integration`. O teste cria um banco descartável com Pix e senha sintéticos, inicia a aplicação em uma porta local e não acessa o Turso configurado em `.env.local`.
+Antes de publicar uma atualização, execute `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run build` e `npm run test:integration`. O teste de integração cria um banco descartável com Pix e senha sintéticos, inicia a aplicação em uma porta local e não acessa o Turso configurado em `.env.local`.
 
 Abra `http://localhost:3000/maria-antonella`. O painel fica em `http://localhost:3000/admin/maria-antonella/login`.
 
@@ -34,7 +34,7 @@ Configure `SEED_PIX_KEY`, `SEED_PIX_RECEIVER_NAME` e `SEED_PIX_RECEIVER_CITY` co
 
 Para atualizar Pix ou trocar a senha após o seed, ajuste as variáveis no ambiente e execute `npm run db:configure`. Essa ação atualiza a rifa definida por `RAFFLE_SLUG` (padrão: `maria-antonella`). A senha é armazenada como hash com sal. Remova as variáveis de seed do ambiente de produção depois da configuração; o aplicativo em execução lê Pix e hash do banco.
 
-Trocar a senha com `db:configure` incrementa a versão da sessão e encerra os acessos administrativos anteriores. O login tem limite de tentativas por IP e por rifa.
+Trocar a senha com `db:configure` incrementa a versão da sessão e encerra os acessos administrativos anteriores daquela rifa. Cada rifa usa seu próprio cookie administrativo, permitindo abrir dois painéis no mesmo navegador. O login tem limite de tentativas por IP e por rifa.
 
 ## Reservas, pagamentos e sorteio
 
@@ -47,17 +47,29 @@ Trocar a senha com `db:configure` incrementa a versão da sessão e encerra os a
 
 ## Publicar esta atualização
 
-Faça backup do banco Turso, aplique `npm run db:migrate` no banco remoto e só então publique a versão nova. As migrações `0001` e `0002` adicionam colunas e tabelas sem apagar reservas existentes. Reservas antigas sem `expires_at` continuam válidas e devem ser revisadas manualmente no painel. As sessões antigas do painel precisarão fazer login novamente. Confira na Vercel se a branch de produção acompanha `master`.
+Faça backup do banco Turso, aplique `npm run db:migrate` no banco remoto e só então publique a versão nova. A migração `0003` acrescenta `draws.prize_amount_cents` para registrar o valor do prêmio no momento do sorteio; sorteios antigos sem snapshot continuam usando os valores da rifa. As configurações editam os campos já existentes e preservam o total e o Pix das reservas antigas. Confira na Vercel se a branch de produção acompanha `master`.
+
+## Compartilhamento e instalação do painel
+
+Defina `NEXT_PUBLIC_APP_URL` com a origem pública do site, por exemplo `https://seudominio.com`, sem caminho ou barra final. A home gera título, descrição e imagem Open Graph com os dados da rifa e o `shareImage` do tema. O botão **Compartilhar rifa** no painel usa o compartilhamento nativo do celular quando disponível e copia somente o link público como alternativa.
+
+O painel possui um manifest por rifa em `/admin/<slug>/manifest.webmanifest`. O convite de instalação aparece somente no painel autenticado, quando o navegador oferece instalação; no iPhone aparecem instruções curtas para adicionar à tela inicial. A instalação abre o painel da rifa correta, que continua exigindo a senha. Os convidados não veem convite de instalação. O painel tem `noindex,nofollow`.
+
+`DEFAULT_RAFFLE_SLUG` escolhe a rifa aberta por `/`; caso não seja definido, mantém `maria-antonella` como padrão. Para a limpeza diária dos limites de tentativas, configure `CRON_SECRET` na Vercel com uma string aleatória de pelo menos 16 caracteres. `vercel.json` agenda `/api/internal/cleanup-rate-limits` uma vez por dia às 05:00 UTC. Sem o segredo correto, essa rota responde 401.
+
+## Configurações da rifa
+
+Na área da mãe, **Configurações da rifa** permite alterar data do sorteio, dois prêmios, preço por número e quantidade entre 1 e 1000. Valores são guardados em centavos. O preço novo afeta apenas reservas futuras. Para diminuir a quantidade, todos os números fora da nova faixa precisam estar livres; os registros antigos ficam inativos para preservar o histórico e voltam a ficar disponíveis se a faixa for ampliada. Após o sorteio, as configurações não podem mais ser alteradas.
 
 ## Nova rifa ou tema
 
-Coloque `home-frame.webp`, `guest-frame.webp` e `admin-frame.webp` em `public/themes/<tema>/` e registre os caminhos em `src/config/themes.ts`. As molduras devem manter áreas livres para conteúdo nas mesmas regiões das atuais; caso mudem de proporção ou composição, ajuste o posicionamento em `src/app/globals.css`.
+Coloque as três molduras, uma imagem de compartilhamento de 1200×630 e ícones de 192×192, 512×512 e 180×180 em `public/themes/<tema>/`. Registre os caminhos, cores e posições de conteúdo em `src/config/themes.ts`. Cada tema define `layout.home`, `layout.guest` e `layout.admin` por `top`, `left`, `right` e `bottom`; assim, outra composição de moldura não exige editar o CSS global. A imagem de compartilhamento fica em `shareImage` e os ícones em `icons`.
 
 Cadastre a nova rifa na tabela `raffles` com um `slug` único e `theme_key` correspondente e gere seus registros em `raffle_numbers` de 1 até `total_numbers`. Informe preço e prêmios em centavos, data no formato `AAAA-MM-DD`, dados Pix e hash de senha. As mesmas rotas `/<slug>` e `/admin/<slug>` funcionarão para essa rifa.
 
 ## Vercel
 
-Importe este projeto na Vercel como projeto Next.js. Configure `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` e `SESSION_SECRET` nas variáveis de ambiente da Vercel. Execute migração e seed no banco Turso antes de liberar a URL. `npm run build` é o comando de compilação. As artes ficam em `public/themes/` e são publicadas junto com o aplicativo.
+Importe este projeto na Vercel como projeto Next.js. Configure `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SESSION_SECRET`, `NEXT_PUBLIC_APP_URL`, `DEFAULT_RAFFLE_SLUG` e `CRON_SECRET` nas variáveis de ambiente da Vercel. Execute migração e seed no banco Turso antes de liberar a URL. `npm run build` é o comando de compilação. As artes ficam em `public/themes/` e são publicadas junto com o aplicativo.
 
 ## Comportamento importante
 

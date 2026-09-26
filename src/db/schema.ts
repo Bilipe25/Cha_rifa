@@ -62,6 +62,7 @@ export const draws = sqliteTable('draws', {
   raffleId: text('raffle_id').notNull().references(() => raffles.id),
   prizePosition: integer('prize_position').notNull(),
   prizeLabel: text('prize_label').notNull(),
+  prizeAmountCents: integer('prize_amount_cents'),
   winningNumber: integer('winning_number').notNull(),
   reservationId: text('reservation_id').notNull().references(() => reservations.id),
   createdAt: text('created_at').notNull(),

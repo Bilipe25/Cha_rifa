@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
+import { appBaseUrl } from '@/lib/app-url';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Chá-Rifa da Maria Antonella',
-  description: 'Escolha seus números e participe do Chá-Rifa da Maria Antonella.',
+  metadataBase: appBaseUrl(),
+  title: 'Chá-Rifa Digital',
+  description: 'Escolha seus números e participe do Chá-Rifa.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
