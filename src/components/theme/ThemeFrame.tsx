@@ -3,7 +3,6 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { FrameVariant, RaffleTheme } from '@/config/themes';
 
 type FrameStyle = CSSProperties & {
-  '--frame-aspect-ratio': string;
   '--frame-top': string;
   '--frame-left': string;
   '--frame-right': string;
@@ -17,7 +16,6 @@ export function ThemeFrame({ theme, variant, children, className = '' }: {
 }) {
   const layout = theme.layout[variant];
   const style: FrameStyle = {
-    '--frame-aspect-ratio': theme.frameAspectRatio,
     '--frame-top': layout.top,
     '--frame-left': layout.left,
     '--frame-right': layout.right,

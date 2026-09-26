@@ -9,7 +9,6 @@ export type FrameLayout = {
 
 export type RaffleTheme = {
   frames: Record<FrameVariant, string>;
-  frameAspectRatio: string;
   shareImage: string;
   icons: { icon192: string; icon512: string; appleTouchIcon: string };
   layout: Record<FrameVariant, FrameLayout>;
@@ -25,7 +24,6 @@ export const themes: Record<string, RaffleTheme> = {
       guest: '/themes/maria-antonella/guest-frame.webp',
       admin: '/themes/maria-antonella/admin-frame.webp',
     },
-    frameAspectRatio: '941 / 1672',
     shareImage: '/themes/maria-antonella/share.jpg',
     icons: {
       icon192: '/themes/maria-antonella/icon-192.png',

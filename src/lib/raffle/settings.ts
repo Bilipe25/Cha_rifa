@@ -2,6 +2,13 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { client } from '@/db';
+import { normalizePixMerchantText } from '@/lib/pix-format';
+
+const pixReceiverField = (maxLength: number) => z.string().trim().min(1).max(maxLength)
+  .refine(value => {
+    const normalized = normalizePixMerchantText(value);
+    return normalized.length > 0 && normalized.length <= maxLength;
+  });
 
 export const raffleSettingsSchema = z.object({
   drawDate: z.iso.date().refine(value => new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value, 'Escolha uma data válida.'),
@@ -9,6 +16,9 @@ export const raffleSettingsSchema = z.object({
   prizeTwoCents: z.number().int().min(0).max(1_000_000_000),
   pricePerNumberCents: z.number().int().min(1).max(1_000_000_000),
   totalNumbers: z.number().int().min(1).max(1000),
+  pixKey: z.string().trim().min(1).max(77),
+  pixReceiverName: pixReceiverField(25),
+  pixReceiverCity: pixReceiverField(15),
 });
 
 export type RaffleSettingsInput = z.infer<typeof raffleSettingsSchema>;
@@ -73,9 +83,10 @@ export async function updateRaffleSettings(raffleId: string, input: RaffleSettin
 
     await transaction.execute({
       sql: `UPDATE raffles SET draw_date = ?, prize_one_cents = ?, prize_two_cents = ?,
-            price_per_number_cents = ?, total_numbers = ? WHERE id = ? AND status != 'drawn'`,
+            price_per_number_cents = ?, total_numbers = ?, pix_key = ?, pix_receiver_name = ?, pix_receiver_city = ?
+            WHERE id = ? AND status != 'drawn'`,
       args: [settings.drawDate, settings.prizeOneCents, settings.prizeTwoCents,
-        settings.pricePerNumberCents, nextTotal, raffleId],
+        settings.pricePerNumberCents, nextTotal, settings.pixKey, settings.pixReceiverName, settings.pixReceiverCity, raffleId],
     });
     await transaction.commit();
   } catch (error) {

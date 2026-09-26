@@ -11,8 +11,8 @@ button:disabled { cursor:not-allowed; }
 ::selection { background:#f6a9c4; color:#562a42; }
 :focus-visible { outline:3px solid #9551b8; outline-offset:3px; }
 .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
-.theme-frame { position:relative; width:min(100vw,480px); height:auto; aspect-ratio:var(--frame-aspect-ratio); overflow:hidden; flex:none; align-self:flex-start; box-shadow:0 12px 42px #bd6b8d25; }
-.frame-art { object-fit:contain; z-index:0; }
+.theme-frame { position:relative; width:min(100vw,480px); height:100vh; height:100dvh; overflow:hidden; flex:none; align-self:flex-start; box-shadow:0 12px 42px #bd6b8d25; }
+.frame-art { object-fit:fill; z-index:0; }
 .frame-content { position:absolute; z-index:1; min-width:0; top:var(--frame-top); left:var(--frame-left); right:var(--frame-right); bottom:var(--frame-bottom); }
 .frame-content--home { display:flex; flex-direction:column; justify-content:space-around; gap:1.1%; overflow-y:auto; scrollbar-width:thin; }
 .frame-content--guest,.frame-content--admin { overflow:hidden; }
@@ -103,11 +103,12 @@ button:disabled { cursor:not-allowed; }
 .admin-action:hover { background:#f8d3e3; }
 .admin-action>span { display:inline-flex; align-items:center; gap:9px; min-width:0; }
 .admin-share-action { width:100%; border:0; text-align:left; }
-.install-card { margin-top:15px; padding:14px; border-radius:16px; background:#fff0f5; color:#70475a; }
-.install-card h2 { margin:0 0 6px; color:#a52e60; font-size:17px; line-height:1.2; }
-.install-card p { margin:0 0 10px; font-size:13px; line-height:1.4; }
-.install-card .install-steps { padding:10px; border-radius:11px; background:#fff9fb; }
-.install-card .secondary-button { min-height:44px; }
+.install-dialog { width:min(400px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); margin:auto; padding:24px; overflow-y:auto; border:0; border-radius:22px; background:#fff8fb; color:#70475a; box-shadow:0 18px 40px #28152345; }
+.install-dialog::backdrop { background:#3b1e2e99; }
+.install-dialog h2 { margin:0 0 10px; color:#a52e60; font-size:22px; line-height:1.2; }
+.install-dialog p { margin:0 0 16px; font-size:14px; line-height:1.45; }
+.install-dialog .install-steps { padding:12px; border-radius:11px; background:#fff0f5; }
+.install-dialog .primary-button { min-height:48px; font-size:15px; }
 .install-dismiss { display:block; min-height:44px; margin:5px auto 0; border:0; background:transparent; color:#94365f; font-size:13px; font-weight:800; }
 .settings-panel .panel-heading { margin-bottom:14px; }
 .settings-panel .panel-heading p { margin-top:5px; }
@@ -122,9 +123,6 @@ button:disabled { cursor:not-allowed; }
 .admin-login { display:flex; flex-direction:column; justify-content:center; }
 .admin-login>.panel-heading { margin-bottom:8%; }
 .admin-login>.primary-button { margin-top:5%; }
-.filter-row { display:flex; gap:5px; margin-bottom:3%; overflow-x:auto; padding-bottom:3px; }
-.filter-row button { flex:none; min-height:44px; padding:6px 11px; border:1px solid #f3c7d7; border-radius:999px; background:#fff9fb; color:#864a66; font-size:12px; font-weight:800; white-space:nowrap; }
-.filter-row button.active { border-color:#a8224b; background:#bd2c5b; color:white; }
 .participants-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#e2a4bb transparent; }
 .participant-card { padding:4%; margin-bottom:2.5%; border-radius:17px; background:#fff0f5; }
 .participant-header { display:flex; align-items:start; justify-content:space-between; gap:5px; }
@@ -187,6 +185,27 @@ button:disabled { cursor:not-allowed; }
 .result-rules p { font-size:13px; line-height:1.5; }
 .closed-panel { display:flex; flex-direction:column; justify-content:center; gap:13px; text-align:center; }
 .closed-panel p { font-size:14px; line-height:1.4; }
+
+/* Keep navigation and touch feedback quick, so the next task never feels delayed. */
+.route-surface { display:flex; justify-content:center; width:100%; animation:frame-arrive 220ms cubic-bezier(.16,1,.3,1) backwards; }
+.frame-content { animation:content-arrive 260ms cubic-bezier(.16,1,.3,1) backwards; }
+@keyframes frame-arrive { from { opacity:.8; } to { opacity:1; } }
+@keyframes content-arrive { from { transform:translateY(5px); } to { transform:translateY(0); } }
+
+.primary-button,.secondary-button,.admin-action,.home-my-numbers,.number-button,.participant-actions button,.participant-actions a,.back-link,.logout-button,.install-dismiss,.admin-topline a {
+  transition:transform 130ms ease-out, box-shadow 180ms ease-out, background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out;
+}
+.primary-button:active:not(:disabled),.secondary-button:active:not(:disabled),.admin-action:active,.home-my-numbers:active,.number-button:active:not(:disabled),.participant-actions button:active:not(:disabled),.participant-actions a:active,.back-link:active,.logout-button:active,.install-dismiss:active,.admin-topline a:active {
+  transform:scale(.975);
+}
+.number-button--selected { animation:number-chosen 190ms cubic-bezier(.16,1,.3,1); }
+@keyframes number-chosen { from { transform:scale(.92); } to { transform:scale(1); } }
+
+@media (prefers-reduced-motion:reduce) {
+  .route-surface,.frame-content,.number-button--selected { animation:none; }
+  .primary-button,.secondary-button,.admin-action,.home-my-numbers,.number-button,.participant-actions button,.participant-actions a,.back-link,.logout-button,.install-dismiss,.admin-topline a { transition:background-color 100ms linear,border-color 100ms linear,color 100ms linear; }
+  .primary-button:active:not(:disabled),.secondary-button:active:not(:disabled),.admin-action:active,.home-my-numbers:active,.number-button:active:not(:disabled),.participant-actions button:active:not(:disabled),.participant-actions a:active,.back-link:active,.logout-button:active,.install-dismiss:active,.admin-topline a:active { transform:none; }
+}
 @media (min-width:410px) { .number-grid { grid-template-columns:repeat(6,minmax(0,1fr)); } }
 @media (min-width:390px) { .settings-prizes { grid-template-columns:1fr 1fr; gap:9px; } }
 @media (max-width:350px) { .frame-content { left:var(--frame-compact-left,var(--frame-left)); right:var(--frame-compact-right,var(--frame-right)); } .panel-heading h2 { font-size:19px; } .number-grid { gap:5px; } .number-button { min-height:44px; } .selection-summary { margin:1.5% 0; } .picker>.primary-button { min-height:44px; } .prize-card { border-width:2px; min-height:62px; } .frame-content--home { gap:6px; justify-content:flex-start; } .date-card,.price-strip { padding-top:2%; padding-bottom:2%; } }

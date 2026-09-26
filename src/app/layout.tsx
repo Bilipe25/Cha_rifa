@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { appBaseUrl } from '@/lib/app-url';
+import { TouchFeedback } from '@/components/ui/TouchFeedback';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -9,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="pt-BR"><body>{children}</body></html>;
+  return <html lang="pt-BR"><body><TouchFeedback />{children}</body></html>;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAdminInstall } from '@/components/pwa/AdminInstallProvider';
 
 const dismissDays = 3;
@@ -10,6 +10,7 @@ export function InstallAdminApp({ slug, babyName }: { slug: string; babyName: st
   const [isIos, setIsIos] = useState(false);
   const [visible, setVisible] = useState(false);
   const [installError, setInstallError] = useState('');
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     const key = `charifa_install_dismissed_${slug}`;
@@ -25,10 +26,15 @@ export function InstallAdminApp({ slug, babyName }: { slug: string; babyName: st
     setVisible(ios || Boolean(promptEvent));
   }, [slug, promptEvent, installed]);
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (visible && dialog && !dialog.open) dialog.showModal();
+  }, [visible]);
+
   function dismiss() {
     try {
       localStorage.setItem(`charifa_install_dismissed_${slug}`, String(Date.now() + dismissDays * 24 * 60 * 60 * 1000));
-    } catch { /* The card can still be dismissed for this page visit. */ }
+    } catch { /* The dialog can still be dismissed for this page visit. */ }
     setVisible(false);
   }
 
@@ -47,15 +53,14 @@ export function InstallAdminApp({ slug, babyName }: { slug: string; babyName: st
     }
   }
 
-  if (installed) return <p className="inline-notice" role="status">Prontinho! O painel foi adicionado ao seu celular. 💕</p>;
-  if (!visible) return null;
-  return <aside className="install-card" aria-label="Instalar painel">
-    <h2>Tenha seu painel sempre à mão 💕</h2>
-    <p>Você pode adicionar o Chá-Rifa da {babyName} à tela inicial do celular e abrir como um aplicativo.</p>
+  if (installed || !visible) return null;
+  return <dialog ref={dialogRef} className="install-dialog" aria-labelledby="install-title" aria-describedby="install-description" onClose={dismiss}>
+    <h2 id="install-title">Tenha seu painel sempre à mão</h2>
+    <p id="install-description">Você pode adicionar o Chá-Rifa da {babyName} à tela inicial do celular e abrir como um aplicativo.</p>
     {isIos && !promptEvent
       ? <p className="install-steps">No iPhone: toque em <strong>Compartilhar</strong>, escolha <strong>Adicionar à Tela de Início</strong> e toque em <strong>Adicionar</strong>.</p>
-      : <button type="button" className="secondary-button" onClick={install}>INSTALAR PAINEL</button>}
+      : <button type="button" className="primary-button" onClick={install}>INSTALAR PAINEL</button>}
     {installError && <p className="inline-notice" role="alert">{installError}</p>}
-    <button type="button" className="install-dismiss" onClick={dismiss}>Agora não</button>
-  </aside>;
+    <button type="button" className="install-dismiss" onClick={() => dialogRef.current?.close()}>Agora não</button>
+  </dialog>;
 }
