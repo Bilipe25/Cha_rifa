@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { client } from '@/db';
 import { normalizePixMerchantText } from '@/lib/pix-format';
+import { normalizePixKey } from '@/lib/pix-key';
 
 const pixReceiverField = (maxLength: number) => z.string().trim().min(1).max(maxLength)
   .refine(value => {
@@ -15,27 +16,35 @@ export const raffleSettingsSchema = z.object({
   prizeOneCents: z.number().int().min(0).max(1_000_000_000),
   prizeTwoCents: z.number().int().min(0).max(1_000_000_000),
   pricePerNumberCents: z.number().int().min(1).max(1_000_000_000),
-  totalNumbers: z.number().int().min(1).max(1000),
-  pixKey: z.string().trim().min(1).max(77),
+  totalNumbers: z.number().int().min(2).max(1000),
+  pixKey: z.string().trim().min(1).max(77).refine(value => normalizePixKey(value) !== null).transform(value => normalizePixKey(value)!),
   pixReceiverName: pixReceiverField(25),
-  pixReceiverCity: pixReceiverField(15),
+  // Existing campaigns may still carry a longer city from the original seed.
+  // A changed Pix configuration is checked against the current 15-character limit below.
+  pixReceiverCity: pixReceiverField(77),
 });
 
 export type RaffleSettingsInput = z.infer<typeof raffleSettingsSchema>;
 
 export class SettingsConflictError extends Error {}
+export class SettingsValidationError extends Error {}
 
 export async function updateRaffleSettings(raffleId: string, input: RaffleSettingsInput) {
   const settings = raffleSettingsSchema.parse(input);
   const transaction = await client.transaction('write');
   try {
     const result = await transaction.execute({
-      sql: 'SELECT status, total_numbers FROM raffles WHERE id = ?',
+      sql: 'SELECT status, total_numbers, pix_key, pix_receiver_name, pix_receiver_city FROM raffles WHERE id = ?',
       args: [raffleId],
     });
     const raffle = result.rows[0];
     if (!raffle) throw new SettingsConflictError('Rifa não encontrada.');
     if (raffle.status === 'drawn') throw new SettingsConflictError('As configurações não podem ser alteradas após o sorteio.');
+    const pixChanged = settings.pixKey !== (normalizePixKey(String(raffle.pix_key)) ?? raffle.pix_key) || settings.pixReceiverName !== raffle.pix_receiver_name ||
+      settings.pixReceiverCity !== raffle.pix_receiver_city;
+    if (pixChanged && settings.pixReceiverCity.length > 15) {
+      throw new SettingsValidationError('A cidade Pix precisa ter até 15 caracteres.');
+    }
     const oldTotal = Number(raffle.total_numbers);
     const nextTotal = settings.totalNumbers;
     const now = new Date().toISOString();

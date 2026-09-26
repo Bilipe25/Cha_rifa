@@ -1,4 +1,5 @@
 import { normalizePixMerchantText } from './pix-format';
+import { normalizePixKey } from './pix-key';
 
 function field(id: string, value: string) {
   if (value.length > 99) throw new Error('Campo Pix muito longo');
@@ -17,9 +18,9 @@ function crc16(value: string) {
 export function createPixPayload({ key, receiverName, city, amountCents, txid }: {
   key: string; receiverName: string; city: string; amountCents: number; txid: string;
 }) {
-  if (!key.trim() || !receiverName.trim() || !city.trim() || amountCents < 1) throw new Error('Pix não configurado');
-  if (key.trim().length > 77) throw new Error('Chave Pix muito longa');
-  const merchantAccount = field('00', 'br.gov.bcb.pix') + field('01', key.trim());
+  const normalizedKey = normalizePixKey(key);
+  if (!normalizedKey || !receiverName.trim() || !city.trim() || amountCents < 1) throw new Error('Pix não configurado');
+  const merchantAccount = field('00', 'br.gov.bcb.pix') + field('01', normalizedKey);
   const payload = field('00', '01') + field('26', merchantAccount) + field('52', '0000') + field('53', '986') +
     field('54', (amountCents / 100).toFixed(2)) + field('58', 'BR') + field('59', normalizePixMerchantText(receiverName).slice(0, 25)) +
     field('60', normalizePixMerchantText(city).slice(0, 15)) + field('62', field('05', normalizePixMerchantText(txid).slice(0, 25))) + '6304';

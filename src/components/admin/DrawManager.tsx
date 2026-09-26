@@ -45,6 +45,7 @@ export function DrawManager({ slug, eligibleNumbers, winners, prizeOneCents, pri
     try {
       const response = await fetch(`/api/admin/${slug}/lifecycle`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
       const result = await response.json();
+      if (response.status === 401) { router.replace(`/admin/${slug}/login`); return; }
       if (!response.ok) { setError(result.error || 'Não foi possível atualizar a rifa.'); return; }
       router.refresh();
     } catch { setError('Não foi possível atualizar a rifa agora.'); }
@@ -55,6 +56,7 @@ export function DrawManager({ slug, eligibleNumbers, winners, prizeOneCents, pri
     try {
       const response = await fetch(`/api/admin/${slug}/draw`, { method: 'POST' });
       const result = await response.json();
+      if (response.status === 401) { router.replace(`/admin/${slug}/login`); return; }
       if (!response.ok) { setError(result.error || 'Não foi possível realizar o sorteio.'); return; }
       setConfirm(false); router.refresh();
     } catch { setError('Não foi possível realizar o sorteio agora.'); }
@@ -74,7 +76,7 @@ export function DrawManager({ slug, eligibleNumbers, winners, prizeOneCents, pri
       <button ref={openButtonRef} className="primary-button" onClick={() => setConfirm(true)} disabled={eligibleNumbers < 2 || raffleStatus !== 'closed' || unresolved > 0 || !drawDateReached}><Icon name="gift"/><span>REALIZAR SORTEIO</span><Icon name="arrow"/></button>
       {eligibleNumbers < 2 && <p className="empty-state">É preciso ter pelo menos dois números pagos para sortear.</p>}
     </>}
-    {error && <p className="inline-notice" role="alert">{error}</p>}
-    {confirm && <div className="modal-backdrop" role="presentation"><div ref={dialogRef} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="draw-confirm-title"><h3 id="draw-confirm-title">Confirmar sorteio?</h3><p>Somente os números com pagamento confirmado participarão do sorteio. Esta ação não poderá ser desfeita.</p><div><button type="button" className="secondary-button" onClick={() => setConfirm(false)}>Voltar</button><button type="button" className="primary-button" disabled={busy} onClick={draw}>{busy ? 'SORTEANDO...' : 'CONFIRMAR SORTEIO'}</button></div></div></div>}
+    {!confirm && error && <p className="inline-notice" role="alert">{error}</p>}
+    {confirm && <div className="modal-backdrop" role="presentation"><div ref={dialogRef} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="draw-confirm-title"><h3 id="draw-confirm-title">Confirmar sorteio?</h3><p>Somente os números com pagamento confirmado participarão do sorteio. Esta ação não poderá ser desfeita.</p>{error && <p className="inline-notice" role="alert">{error}</p>}<div><button type="button" className="secondary-button" onClick={() => setConfirm(false)}>Voltar</button><button type="button" className="primary-button" disabled={busy} onClick={draw}>{busy ? 'SORTEANDO...' : 'CONFIRMAR SORTEIO'}</button></div></div></div>}
   </div>;
 }

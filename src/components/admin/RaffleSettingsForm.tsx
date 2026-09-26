@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/ui/Icons';
 import { formatMoney } from '@/lib/currency';
 import { normalizePixMerchantText } from '@/lib/pix-format';
+import { normalizePixKey } from '@/lib/pix-key';
 
 type Settings = {
   drawDate: string;
@@ -71,21 +72,23 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
       prizeTwoCents: parseBrl(prizeTwo),
       pricePerNumberCents: parseBrl(price),
       totalNumbers: Number(quantity),
-      pixKey: pixKey.trim(),
+      pixKey: normalizePixKey(pixKey),
       pixReceiverName: pixReceiverName.trim(),
       pixReceiverCity: pixReceiverCity.trim(),
     };
     if (values.prizeOneCents === null || values.prizeTwoCents === null || values.pricePerNumberCents === null ||
-      values.pricePerNumberCents < 1 || !Number.isInteger(values.totalNumbers) || values.totalNumbers < 1 || values.totalNumbers > 1000) {
-      setError('Confira os valores e escolha uma quantidade entre 1 e 1000 números.');
+      values.pricePerNumberCents < 1 || !Number.isInteger(values.totalNumbers) || values.totalNumbers < 2 || values.totalNumbers > 1000) {
+      setError('Confira os valores e escolha uma quantidade entre 2 e 1000 números.');
       return;
     }
+    if (!values.pixKey) { setError('Confira a chave Pix. Use CPF/CNPJ, e-mail, celular ou chave aleatória em formato válido.'); return; }
     const normalizedReceiver = normalizePixMerchantText(values.pixReceiverName);
     const normalizedCity = normalizePixMerchantText(values.pixReceiverCity);
-    if (!values.pixKey || values.pixKey.length > 77 || !normalizedReceiver || normalizedReceiver.length > 25 ||
-      !normalizedCity || normalizedCity.length > 15) {
-      setError('Preencha a chave Pix, o nome do recebedor (até 25 caracteres) e a cidade (até 15).');
-      return;
+    if (!normalizedReceiver || normalizedReceiver.length > 25) { setError('O nome do recebedor deve ter até 25 caracteres aceitos pelo Pix.'); return; }
+    const pixChanged = values.pixKey !== saved.pixKey || values.pixReceiverName !== saved.pixReceiverName ||
+      values.pixReceiverCity !== saved.pixReceiverCity;
+    if (!normalizedCity || (pixChanged && normalizedCity.length > 15)) {
+      setError('A cidade do recebedor deve ter até 15 caracteres aceitos pelo Pix.'); return;
     }
     const next = values as Settings;
     if (hasReservations && (next.pricePerNumberCents !== saved.pricePerNumberCents || next.totalNumbers !== saved.totalNumbers)) {
@@ -100,6 +103,7 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next),
       });
       const body = await response.json();
+      if (response.status === 401) { router.replace(`/admin/${slug}/login`); return; }
       if (!response.ok) {
         setDraft(null);
         setError(body.error || 'Não foi possível salvar. Confira os dados e tente novamente.');
@@ -136,9 +140,9 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
       </label>
       {hasReservations && <p className="settings-help">O novo valor será aplicado somente às próximas reservas.</p>}
       <label className="field-label">Quantidade de números
-        <input type="number" min="1" max="1000" step="1" value={quantity} onChange={event => setQuantity(event.target.value)} required disabled={drawn || busy}/>
+        <input type="number" min="2" max="1000" step="1" value={quantity} onChange={event => setQuantity(event.target.value)} required disabled={drawn || busy}/>
       </label>
-      <p className="settings-help">Você pode ter de 1 a 1000 números. Números já reservados ou pagos ficam protegidos.</p>
+      <p className="settings-help">Você pode ter de 2 a 1000 números. Números já reservados ou pagos ficam protegidos.</p>
       <label className="field-label">Chave Pix
         <input type="text" autoCapitalize="none" spellCheck={false} maxLength={77} value={pixKey} onChange={event => setPixKey(event.target.value)} placeholder="CPF, e-mail, telefone ou chave aleatória" required disabled={drawn || busy}/>
       </label>
@@ -148,6 +152,7 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
       <label className="field-label">Cidade do recebedor
         <input type="text" maxLength={15} value={pixReceiverCity} onChange={event => setPixReceiverCity(event.target.value)} required disabled={drawn || busy}/>
       </label>
+      {saved.pixReceiverCity.length > 15 && <p className="settings-help">A cidade atual é um exemplo antigo. Você pode salvar outras informações; ao trocar qualquer dado Pix, informe uma cidade de até 15 caracteres.</p>}
       <p className="settings-help">Os dados Pix atualizados valem para novas reservas. Códigos Pix já gerados continuam iguais. Nome e cidade são ajustados ao formato do Pix.</p>
       {error && <p className="inline-notice" role="alert">{error}</p>}
       {success && <p className="inline-notice settings-success" role="status">{success}</p>}

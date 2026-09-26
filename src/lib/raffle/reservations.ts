@@ -17,8 +17,13 @@ import { expirePendingReservations } from './lifecycle';
 import { getRaffle } from './queries';
 
 import { MAX_NUMBERS_PER_RESERVATION, PixUnavailableError, RaffleClosedError, reservationDeadline, UnavailableNumbersError } from './shared';
+import { privateFingerprint, RateLimitError } from '@/lib/rate-limit';
 
-export async function createReservation(slug: string, numbers: number[], participantName: string, phone: string) {
+export class PriceChangedError extends Error {
+  constructor(public priceCents: number) { super('O preço de cada número mudou. Confira o novo total antes de reservar.'); }
+}
+
+export async function createReservation(slug: string, numbers: number[], participantName: string, phone: string, expectedPriceCents?: number) {
   const raffle = await getRaffle(slug);
   if (!raffle || raffle.status !== 'active') throw new RaffleClosedError();
   if (!raffle.pixKey || !raffle.pixReceiverName || !raffle.pixReceiverCity) throw new PixUnavailableError();
@@ -40,11 +45,25 @@ export async function createReservation(slug: string, numbers: number[], partici
     if (liveRaffle?.status !== 'active') throw new RaffleClosedError();
     if (uniqueNumbers.some(number => number > Number(liveRaffle.total_numbers))) throw new Error('Números inválidos');
     if (!liveRaffle.pix_key || !liveRaffle.pix_receiver_name || !liveRaffle.pix_receiver_city) throw new PixUnavailableError();
-    const totalCents = uniqueNumbers.length * Number(liveRaffle.price_per_number_cents);
-    const pixPayload = createPixPayload({
-      key: String(liveRaffle.pix_key), receiverName: String(liveRaffle.pix_receiver_name),
-      city: String(liveRaffle.pix_receiver_city), amountCents: totalCents, txid,
+    const priceCents = Number(liveRaffle.price_per_number_cents);
+    if (expectedPriceCents !== undefined && expectedPriceCents !== priceCents) throw new PriceChangedError(priceCents);
+    const nowMillis = Date.now();
+    const quota = await transaction.execute({
+      sql: `INSERT INTO rate_limit_buckets (key, hits, resets_at) VALUES (?, 1, ?)
+            ON CONFLICT(key) DO UPDATE SET hits = CASE WHEN resets_at <= ? THEN 1 ELSE hits + 1 END,
+              resets_at = CASE WHEN resets_at <= ? THEN ? ELSE resets_at END RETURNING hits, resets_at`,
+      args: [`reserve:${slug}:phone:${privateFingerprint(normalizePhone(phone))}`, nowMillis + 86_400_000,
+        nowMillis, nowMillis, nowMillis + 86_400_000],
     });
+    if (Number(quota.rows[0].hits) > 3) throw new RateLimitError(Math.max(1, Math.ceil((Number(quota.rows[0].resets_at) - nowMillis) / 1000)));
+    const totalCents = uniqueNumbers.length * priceCents;
+    let pixPayload: string;
+    try {
+      pixPayload = createPixPayload({
+        key: String(liveRaffle.pix_key), receiverName: String(liveRaffle.pix_receiver_name),
+        city: String(liveRaffle.pix_receiver_city), amountCents: totalCents, txid,
+      });
+    } catch { throw new PixUnavailableError(); }
     await transaction.execute({
       sql: `INSERT INTO reservations (id, raffle_id, participant_name, phone, phone_normalized, status, total_cents, pix_txid, pix_payload, expires_at, created_at)
             VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,

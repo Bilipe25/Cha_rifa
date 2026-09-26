@@ -27,7 +27,9 @@ export async function performDraw(raffleId: string) {
     const previous = await transaction.execute({ sql: 'SELECT id FROM draws WHERE raffle_id = ?', args: [raffleId] });
     if (previous.rows.length) throw new Error('Sorteio já realizado');
     const unresolved = await transaction.execute({
-      sql: `SELECT COUNT(*) AS total FROM reservations WHERE raffle_id = ? AND status IN ('pending', 'payment_reported')`, args: [raffleId],
+      sql: `SELECT COUNT(*) AS total FROM reservations WHERE raffle_id = ? AND
+            (status IN ('pending', 'payment_reported') OR
+             (late_payment_reported_at IS NOT NULL AND late_payment_resolved_at IS NULL))`, args: [raffleId],
     });
     if (Number(unresolved.rows[0].total) > 0) throw new Error('Resolva os pagamentos pendentes antes de sortear.');
     const eligible = await transaction.execute({

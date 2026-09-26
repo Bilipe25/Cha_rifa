@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { formatNumber } from '@/lib/currency';
 import { validPhone } from '@/lib/phone';
@@ -16,6 +16,13 @@ export function MyNumbersLookup({ slug }: { slug: string }) {
   const [results, setResults] = useState<FoundReservation[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [receipts, setReceipts] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const value: unknown = JSON.parse(localStorage.getItem(`charifa:${slug}:receipts`) ?? '[]');
+      if (Array.isArray(value)) setReceipts(value.filter((id): id is string => typeof id === 'string' && /^[0-9a-f-]{36}$/.test(id)));
+    } catch { /* Consulta por telefone continua disponível. */ }
+  }, [slug]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validPhone(phone)) { setError('Confira o número do WhatsApp.'); return; }
@@ -39,6 +46,11 @@ export function MyNumbersLookup({ slug }: { slug: string }) {
       </label>
       <button className="primary-button" type="submit" disabled={busy}><span>{busy ? 'CONSULTANDO...' : 'VER MEUS NÚMEROS'}</span></button>
     </form>
+    {receipts.length > 0 && <section className="local-receipts" aria-label="Reservas salvas neste aparelho">
+      <h3>Reservas neste aparelho</h3>
+      <p>Abra o recibo para acompanhar o pagamento ou copiar o Pix, quando a reserva ainda estiver válida.</p>
+      {receipts.map((id, index) => <Link className="receipt-link" key={id} href={`/${slug}/pix/${id}`}>Abrir reserva {receipts.length - index}</Link>)}
+    </section>}
     {error && <p className="inline-notice" role="alert">{error}</p>}
     {results?.length === 0 && <p className="empty-state" role="status">Não encontramos uma reserva com esse telefone. Confira o número digitado.</p>}
     {results && results.length > 0 && <section className="my-reservations" aria-label="Suas reservas">
@@ -49,7 +61,7 @@ export function MyNumbersLookup({ slug }: { slug: string }) {
         {item.status === 'pending' && item.expiresAt && <p>Faça o Pix até {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Fortaleza' }).format(new Date(item.expiresAt))} para manter esses números.</p>}
         {item.latePaymentReported && <p>{item.latePaymentResolved ? 'A organização registrou a solução para o pagamento fora do prazo.' : 'Você informou um pagamento após o prazo. A organização precisa conferir o caso.'}</p>}
       </article>)}
-      <p className="lookup-privacy">Esta consulta mostra apenas números e situação das reservas. Guarde o link do Pix recebido ao reservar para voltar ao pagamento.</p>
+      <p className="lookup-privacy">A consulta por telefone mostra números e situações. Para recuperar o Pix em outro aparelho, peça o link da reserva à organização.</p>
     </section>}
   </div>;
 }

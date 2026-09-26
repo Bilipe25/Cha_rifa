@@ -22,10 +22,10 @@ export function NumberPicker({ slug, totalNumbers, priceCents, initialOccupied }
     try {
       const stored = JSON.parse(sessionStorage.getItem(storageKey(slug)) ?? '[]') as number[];
       setSelected([...new Set(stored.filter(number => Number.isInteger(number) && number >= 1 && number <= totalNumbers && !occupiedSet.has(number)))].slice(0, MAX_NUMBERS_PER_RESERVATION));
-    } catch { sessionStorage.removeItem(storageKey(slug)); }
+    } catch { /* Sem armazenamento local, a seleção atual ainda funciona. */ }
     setLoaded(true);
   }, [slug, totalNumbers, occupiedSet]);
-  useEffect(() => { if (loaded) sessionStorage.setItem(storageKey(slug), JSON.stringify(selected)); }, [slug, selected, loaded]);
+  useEffect(() => { if (loaded) { try { sessionStorage.setItem(storageKey(slug), JSON.stringify(selected)); } catch { /* O navegador pode bloquear armazenamento. */ } } }, [slug, selected, loaded]);
   useEffect(() => {
     let refreshing = false;
     const refresh = async () => {
@@ -65,8 +65,10 @@ export function NumberPicker({ slug, totalNumbers, priceCents, initialOccupied }
     setSelected(current => current.includes(number) ? current.filter(value => value !== number) : [...current, number].sort((a, b) => a - b));
   }
   function continueToReserve() {
-    sessionStorage.setItem(storageKey(slug), JSON.stringify(selected));
-    router.push(`/${slug}/reservar`);
+    try {
+      sessionStorage.setItem(storageKey(slug), JSON.stringify(selected));
+      router.push(`/${slug}/reservar`);
+    } catch { router.push(`/${slug}/reservar?numeros=${selected.join(',')}`); }
   }
   return <div className="picker panel-layout">
     <div className="panel-heading"><h2>Escolha seus números</h2><p>Selecione os números disponíveis para participar</p></div>

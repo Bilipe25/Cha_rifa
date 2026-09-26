@@ -30,24 +30,24 @@ Quando mudar o schema, rode `npm run db:generate`, revise a migração em `drizz
 
 ## Pix e senha da mãe
 
-Configure `SEED_PIX_KEY`, `SEED_PIX_RECEIVER_NAME` e `SEED_PIX_RECEIVER_CITY` com os dados reais da recebedora antes do primeiro seed. Sem as três informações, a página de reserva informa que o pagamento ainda não está disponível e não bloqueia números. O app não confirma Pix automaticamente: a participante avisa que pagou e a mãe confirma no painel.
+Configure `SEED_PIX_KEY`, `SEED_PIX_RECEIVER_NAME` e `SEED_PIX_RECEIVER_CITY` com os dados reais da recebedora antes do primeiro seed. Sem as três informações, a página de reserva informa que o pagamento ainda não está disponível e não bloqueia números. A chave aceita celular brasileiro, CPF, CNPJ, e-mail ou chave aleatória; o celular é gravado no formato `+55...`. O app valida o formato, mas não verifica se a chave está registrada no banco. Nome e cidade precisam ter até 25 e 15 caracteres, respectivamente. O app não confirma Pix automaticamente: a participante avisa que pagou e a mãe confirma no painel.
 
-Para atualizar Pix ou trocar a senha após o seed, ajuste as variáveis no ambiente e execute `npm run db:configure`. Essa ação atualiza a rifa definida por `RAFFLE_SLUG` (padrão: `maria-antonella`). A senha é armazenada como hash com sal. Remova as variáveis de seed do ambiente de produção depois da configuração; o aplicativo em execução lê Pix e hash do banco.
+Para atualizar Pix após o seed, use **Configurações da rifa** no painel da mãe. A própria cliente deve preencher a chave, o nome e a cidade dela antes de receber pagamentos; os dados usados na instalação inicial são apenas exemplos. Para trocar a senha, ajuste a variável no ambiente e execute `npm run db:configure`. Essa ação atualiza a rifa definida por `RAFFLE_SLUG` (padrão: `maria-antonella`). A senha é armazenada como hash com sal. Remova as variáveis de seed do ambiente de produção depois da configuração; o aplicativo em execução lê Pix e hash do banco.
 
 Trocar a senha com `db:configure` incrementa a versão da sessão e encerra os acessos administrativos anteriores daquela rifa. Cada rifa usa seu próprio cookie administrativo, permitindo abrir dois painéis no mesmo navegador. O login tem limite de tentativas por IP e por rifa.
 
 ## Reservas, pagamentos e sorteio
 
-- Cada reserva aceita até 10 números. Uma reserva que continua **sem aviso de pagamento** vence após 24 horas. A consulta de disponibilidade libera automaticamente esses números e registra a alteração no histórico.
+- Cada reserva aceita até 10 números, com limite de três reservas concluídas por telefone em 24 horas. Tentativas frustradas por conflito de números não gastam esse limite. Uma reserva que continua **sem aviso de pagamento** vence após 24 horas. A consulta de disponibilidade libera automaticamente esses números e registra a alteração no histórico.
 - Ao tocar em “Já fiz o pagamento”, a reserva fica aguardando conferência manual, sem expiração automática, para não liberar números de alguém que pagou. A mãe precisa confirmar o pagamento ou liberar a reserva no painel.
-- Se a pessoa informar que pagou depois de a reserva vencer, os números permanecem liberados. O painel mostra o caso em “Após o prazo”, permite conversar pelo WhatsApp e registrar a solução combinada, como reembolso ou novos números. Um Pix Copia e Cola já copiado não pode ser cancelado pelo aplicativo.
+- Se a pessoa informar que pagou depois de a reserva vencer, os números permanecem liberados. A tela Pix mostra que a reserva venceu e oculta o código de pagamento. O painel mostra o caso em “Após o prazo”, permite conversar pelo WhatsApp e registrar a solução combinada, como reembolso ou novos números. Um Pix Copia e Cola já copiado não pode ser cancelado pelo aplicativo. Casos após o prazo ainda sem solução impedem o sorteio.
 - O painel permite encerrar e reabrir reservas antes do sorteio. Para sortear, a rifa precisa estar encerrada, a data anunciada precisa ter chegado, todas as reservas pendentes precisam estar resolvidas e pelo menos dois números pagos precisam existir. Depois do sorteio, reservas e mudanças de pagamento ficam bloqueadas.
-- A home mostra “Ver meus números” no navegador em que uma reserva foi concluída. A consulta por telefone exibe apenas números e situação das reservas, sem nomes, valores ou links de Pix. Telefone sozinho não comprova identidade; se a rifa exigir privacidade maior, adicione verificação por código antes de disponibilizar essa consulta em outra campanha.
+- A home sempre mostra “Ver meus números”. No navegador usado para reservar, essa página oferece links locais para acompanhar cada pagamento; o link também pode ser guardado ao concluir a reserva. A consulta por telefone exibe apenas números e situação das reservas, sem nomes, valores ou links de Pix. Em outro aparelho, peça o link à organização. Telefone sozinho não comprova identidade; se a rifa exigir privacidade maior, adicione verificação por código antes de disponibilizar essa consulta em outra campanha.
 - O resultado público fica em `/<slug>/resultado` e mostra apenas números vencedores, data e regras, sem telefone.
 
 ## Publicar esta atualização
 
-Faça backup do banco Turso, aplique `npm run db:migrate` no banco remoto e só então publique a versão nova. A migração `0003` acrescenta `draws.prize_amount_cents` para registrar o valor do prêmio no momento do sorteio; sorteios antigos sem snapshot continuam usando os valores da rifa. As configurações editam os campos já existentes e preservam o total e o Pix das reservas antigas. Confira na Vercel se a branch de produção acompanha `master`.
+As mudanças desta revisão não exigem nova migração. Ao publicar outra versão que inclua migrações, faça backup do banco Turso e aplique `npm run db:migrate` antes do deploy. A migração `0003` acrescentou `draws.prize_amount_cents` para registrar o valor do prêmio no momento do sorteio; sorteios antigos sem snapshot continuam usando os valores da rifa. As configurações preservam o total e o Pix das reservas antigas. Confira na Vercel se a branch de produção acompanha `master`.
 
 ## Compartilhamento e instalação do painel
 
@@ -59,7 +59,7 @@ O painel possui um manifest por rifa em `/admin/<slug>/manifest.webmanifest`. O 
 
 ## Configurações da rifa
 
-Na área da mãe, **Configurações da rifa** permite alterar data do sorteio, dois prêmios, preço por número e quantidade entre 1 e 1000. Valores são guardados em centavos. O preço novo afeta apenas reservas futuras. Para diminuir a quantidade, todos os números fora da nova faixa precisam estar livres; os registros antigos ficam inativos para preservar o histórico e voltam a ficar disponíveis se a faixa for ampliada. Após o sorteio, as configurações não podem mais ser alteradas.
+Na área da mãe, **Configurações da rifa** permite alterar data do sorteio, dois prêmios, preço por número, quantidade entre 2 e 1000, chave Pix, nome e cidade da recebedora. Valores são guardados em centavos. O preço e os dados Pix novos afetam apenas reservas futuras; se o preço mudou enquanto a participante preenchia a reserva, a tela informa o valor atualizado antes de concluir. Para diminuir a quantidade, todos os números fora da nova faixa precisam estar livres; os registros antigos ficam inativos para preservar o histórico e voltam a ficar disponíveis se a faixa for ampliada. Após o sorteio, as configurações não podem mais ser alteradas.
 
 ## Nova rifa ou tema
 
