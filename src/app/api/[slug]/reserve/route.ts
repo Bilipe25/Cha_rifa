@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createReservation, PixUnavailableError, UnavailableNumbersError } from '@/lib/raffle';
-import { validPhone } from '@/lib/phone';
+import { createReservation, PixUnavailableError, RaffleClosedError, UnavailableNumbersError } from '@/lib/raffle';
+import { MAX_NUMBERS_PER_RESERVATION } from '@/config/limits';
+import { normalizePhone, validPhone } from '@/lib/phone';
+import { clientFingerprint, consumeRateLimits, privateFingerprint, RateLimitError } from '@/lib/rate-limit';
 
 const input = z.object({
-  numbers: z.array(z.number().int().min(1).max(10000)).min(1).max(200),
+  numbers: z.array(z.number().int().min(1).max(10000)).min(1).max(MAX_NUMBERS_PER_RESERVATION),
   name: z.string().trim().min(2).max(100),
   phone: z.string().trim().min(10).max(30).refine(validPhone),
 });
@@ -14,9 +16,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   const parsed = input.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Confira seus dados e tente novamente.' }, { status: 400 });
   try {
+    const day = 24 * 60 * 60 * 1000;
+    await consumeRateLimits([
+      { key: `reserve:${slug}:ip:${clientFingerprint(request)}`, limit: 15, windowMs: day },
+      { key: `reserve:${slug}:phone:${privateFingerprint(normalizePhone(parsed.data.phone))}`, limit: 3, windowMs: day },
+      { key: `reserve:${slug}:global`, limit: 250, windowMs: day },
+    ]);
     const reservationId = await createReservation(slug, parsed.data.numbers, parsed.data.name, parsed.data.phone);
     return NextResponse.json({ reservationId });
   } catch (error) {
+    if (error instanceof RateLimitError) return NextResponse.json({ error: 'Muitas tentativas de reserva. Aguarde um pouco e tente novamente.' },
+      { status: 429, headers: { 'Retry-After': String(error.retryAfterSeconds) } });
+    if (error instanceof RaffleClosedError) return NextResponse.json({ error: 'As reservas desta rifa foram encerradas.' }, { status: 409 });
     if (error instanceof UnavailableNumbersError) {
       return NextResponse.json({ error: 'Alguns números acabaram de ser escolhidos por outra pessoa. Atualizamos a lista para você.', code: 'unavailable' }, { status: 409 });
     }

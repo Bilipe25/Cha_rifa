@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Icon } from '@/components/ui/Icons';
 import { formatMoney, formatNumber } from '@/lib/currency';
+import { MAX_NUMBERS_PER_RESERVATION } from '@/config/limits';
 
 const storageKey = (slug: string) => `charifa:${slug}:selection`;
 
@@ -20,24 +21,47 @@ export function NumberPicker({ slug, totalNumbers, priceCents, initialOccupied }
   useEffect(() => {
     try {
       const stored = JSON.parse(sessionStorage.getItem(storageKey(slug)) ?? '[]') as number[];
-      setSelected(stored.filter(number => Number.isInteger(number) && number >= 1 && number <= totalNumbers && !occupiedSet.has(number)));
+      setSelected([...new Set(stored.filter(number => Number.isInteger(number) && number >= 1 && number <= totalNumbers && !occupiedSet.has(number)))].slice(0, MAX_NUMBERS_PER_RESERVATION));
     } catch { sessionStorage.removeItem(storageKey(slug)); }
     setLoaded(true);
   }, [slug, totalNumbers, occupiedSet]);
   useEffect(() => { if (loaded) sessionStorage.setItem(storageKey(slug), JSON.stringify(selected)); }, [slug, selected, loaded]);
   useEffect(() => {
+    let refreshing = false;
     const refresh = async () => {
+      if (document.visibilityState === 'hidden' || refreshing) return;
+      refreshing = true;
       try {
         const response = await fetch(`/api/${slug}/numbers`, { cache: 'no-store' });
-        if (response.ok) setOccupied((await response.json()).occupied);
+        if (response.ok) {
+          const next = (await response.json()).occupied as number[];
+          setOccupied(current => current.length === next.length && current.every((value, index) => value === next[index]) ? current : next);
+          try {
+            const stored = JSON.parse(sessionStorage.getItem(storageKey(slug)) ?? '[]') as number[];
+            if (Array.isArray(stored) && stored.some(number => next.includes(number))) {
+              setNotice('Um dos números escolhidos foi reservado por outra pessoa. Confira sua seleção.');
+            }
+          } catch { /* A seleção será validada no servidor. */ }
+          setSelected(current => {
+            const available = current.filter(number => !next.includes(number));
+            return available.length === current.length ? current : available;
+          });
+        }
       } catch { /* A reserva ainda é validada no servidor. */ }
+      finally { refreshing = false; }
     };
+    const timer = window.setInterval(refresh, 30_000);
     window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
   }, [slug]);
   function toggle(number: number) {
     if (occupiedSet.has(number)) return;
     setNotice('');
+    if (!selected.includes(number) && selected.length >= MAX_NUMBERS_PER_RESERVATION) {
+      setNotice(`Escolha até ${MAX_NUMBERS_PER_RESERVATION} números por reserva.`);
+      return;
+    }
     setSelected(current => current.includes(number) ? current.filter(value => value !== number) : [...current, number].sort((a, b) => a - b));
   }
   function continueToReserve() {

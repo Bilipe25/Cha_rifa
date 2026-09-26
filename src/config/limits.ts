@@ -1,0 +1,2 @@
+export const MAX_NUMBERS_PER_RESERVATION = 10;
+export const RESERVATION_HOURS = 24;

@@ -17,6 +17,8 @@ export default async function PixPage({ params }: { params: Promise<{ slug: stri
   return <ThemeFrame themeKey={raffle.themeKey} kind="guest">
     <h1 className="sr-only">{raffle.title}</h1>
     <PixPayment slug={slug} reservationId={reservationId} numbers={reservation.numbers}
-      totalCents={reservation.totalCents} payload={reservation.pixPayload} qr={qr} status={reservation.status} />
+      totalCents={reservation.totalCents} payload={reservation.pixPayload} qr={qr} status={reservation.status}
+      expiresAt={reservation.expiresAt} cancelReason={reservation.cancelReason}
+      latePaymentReported={Boolean(reservation.latePaymentReportedAt)} />
   </ThemeFrame>;
 }

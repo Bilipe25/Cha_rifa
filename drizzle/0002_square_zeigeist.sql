@@ -1,0 +1,1 @@
+ALTER TABLE `reservations` ADD `late_payment_resolved_at` text;

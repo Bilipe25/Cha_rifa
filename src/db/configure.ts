@@ -7,7 +7,7 @@ async function main() {
   const { db } = await import('./index');
   const { raffles } = await import('./schema');
   const { hashPassword } = await import('../lib/password');
-  const { eq } = await import('drizzle-orm');
+  const { eq, sql } = await import('drizzle-orm');
   const slug = process.env.RAFFLE_SLUG || 'maria-antonella';
   const [raffle] = await db.select({ id: raffles.id }).from(raffles).where(eq(raffles.slug, slug));
   if (!raffle) throw new Error(`Rifa ${slug} não encontrada. Execute o seed primeiro.`);
@@ -24,7 +24,10 @@ async function main() {
     changes.adminPasswordHash = hashPassword(process.env.SEED_ADMIN_PASSWORD);
   }
   if (!Object.keys(changes).length) throw new Error('Defina os dados Pix ou a senha nas variáveis de ambiente.');
-  await db.update(raffles).set(changes).where(eq(raffles.id, raffle.id));
+  await db.update(raffles).set({
+    ...changes,
+    ...(process.env.SEED_ADMIN_PASSWORD ? { sessionVersion: sql`${raffles.sessionVersion} + 1` } : {}),
+  }).where(eq(raffles.id, raffle.id));
   console.log(`Configuração da rifa ${slug} atualizada.`);
 }
 

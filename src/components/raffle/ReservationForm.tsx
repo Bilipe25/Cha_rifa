@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/ui/Icons';
 import { formatMoney, formatNumber } from '@/lib/currency';
 import { normalizePhone, validPhone } from '@/lib/phone';
+import { MAX_NUMBERS_PER_RESERVATION } from '@/config/limits';
 
 function maskPhone(value: string) {
   const digits = normalizePhone(value).slice(0, 11);
@@ -25,7 +26,7 @@ export function ReservationForm({ slug, priceCents, totalNumbers }: { slug: stri
   useEffect(() => {
     try {
       const stored = JSON.parse(sessionStorage.getItem(`charifa:${slug}:selection`) ?? '[]') as number[];
-      setNumbers([...new Set(stored.filter(n => Number.isInteger(n) && n >= 1 && n <= totalNumbers))].sort((a, b) => a - b));
+      setNumbers([...new Set(stored.filter(n => Number.isInteger(n) && n >= 1 && n <= totalNumbers))].sort((a, b) => a - b).slice(0, MAX_NUMBERS_PER_RESERVATION));
     } catch { setNumbers([]); }
   }, [slug, totalNumbers]);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -42,6 +43,7 @@ export function ReservationForm({ slug, priceCents, totalNumbers }: { slug: stri
         setError(result.error || 'Não conseguimos concluir agora. Tente novamente em alguns instantes.'); return;
       }
       sessionStorage.removeItem(`charifa:${slug}:selection`);
+      localStorage.setItem(`charifa:${slug}:has-reservation`, '1');
       router.push(`/${slug}/pix/${result.reservationId}`);
     } catch { setError('Não conseguimos concluir agora. Tente novamente em alguns instantes.'); }
     finally { setBusy(false); }
