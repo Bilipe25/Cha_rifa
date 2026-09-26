@@ -147,11 +147,18 @@ async function main() {
   assert.equal((await request(base, '/')).response.headers.get('location'), `/${slug}`);
 
   const updateSettings = data => request(base, `/api/admin/${slug}/settings`, 'PATCH', data, cookie);
+  const originalPix = { pixKey: '123e4567-e89b-12d3-a456-426614174000', pixReceiverName: 'TESTE CHA RIFA', pixReceiverCity: 'FORTALEZA' };
   const initialSettings = { drawDate: '2026-12-12', prizeOneCents: 11000, prizeTwoCents: 6000,
-    pricePerNumberCents: 500, totalNumbers: 250 };
+    pricePerNumberCents: 500, totalNumbers: 250, ...originalPix };
+  const pixSettings = { pixKey: 'mae.maria@example.com', pixReceiverName: ' Mãe da Maria ', pixReceiverCity: ' Aracaju ' };
+  const pixField = (id, value) => `${id}${String(value.length).padStart(2, '0')}${value}`;
   assert.equal((await updateSettings({ ...initialSettings, pricePerNumberCents: -1 })).response.status, 400);
   assert.equal((await updateSettings({ ...initialSettings, drawDate: '2026-02-31' })).response.status, 400);
   assert.equal((await updateSettings({ ...initialSettings, totalNumbers: 1001 })).response.status, 400);
+  assert.equal((await updateSettings({ ...initialSettings, pixKey: 'x'.repeat(78) })).response.status, 400, 'chave Pix tem limite de 77 caracteres');
+  assert.equal((await updateSettings({ ...initialSettings, pixReceiverName: 'N'.repeat(26) })).response.status, 400, 'nome Pix tem limite de 25 caracteres');
+  assert.equal((await updateSettings({ ...initialSettings, pixReceiverCity: 'C'.repeat(16) })).response.status, 400, 'cidade Pix tem limite de 15 caracteres');
+  assert.equal((await updateSettings({ ...initialSettings, pixReceiverName: '😀' })).response.status, 400, 'nome precisa conter texto aceito pelo Pix');
   assert.equal((await updateSettings(initialSettings)).response.status, 200);
   assert.equal(Number((await client.execute({ sql: 'SELECT COUNT(*) AS total FROM raffle_numbers WHERE raffle_id = ? AND number > 200', args: [raffleId] })).rows[0].total), 50);
   const high = await reserve(220, '79999990020');
@@ -175,7 +182,29 @@ async function main() {
   assert.equal(Number(priceRows.find(row => row.id === newPrice.body.reservationId).total_cents), 600);
   assert.match(String(priceRows.find(row => row.id === oldPrice.body.reservationId).pix_payload), /54045\.00/);
   assert.match(String(priceRows.find(row => row.id === newPrice.body.reservationId).pix_payload), /54046\.00/);
-  for (const item of [oldPrice, newPrice]) {
+  const oldPixPayload = String(priceRows.find(row => row.id === oldPrice.body.reservationId).pix_payload);
+  const newPixPayload = String(priceRows.find(row => row.id === newPrice.body.reservationId).pix_payload);
+  assert.ok(oldPixPayload.includes(pixField('01', originalPix.pixKey)), 'reserva anterior conserva a chave Pix anterior');
+  assert.ok(oldPixPayload.includes(pixField('59', originalPix.pixReceiverName)), 'reserva anterior conserva o recebedor anterior');
+  const settingsWithNewPix = { ...initialSettings, pricePerNumberCents: 600, ...pixSettings };
+  assert.equal((await updateSettings(settingsWithNewPix)).response.status, 200, 'admin pode atualizar dados Pix');
+  const savedPix = (await client.execute({ sql: 'SELECT pix_key, pix_receiver_name, pix_receiver_city FROM raffles WHERE id = ?', args: [raffleId] })).rows[0];
+  assert.deepEqual([savedPix.pix_key, savedPix.pix_receiver_name, savedPix.pix_receiver_city],
+    [pixSettings.pixKey, pixSettings.pixReceiverName.trim(), pixSettings.pixReceiverCity.trim()], 'dados Pix são salvos aparando espaços');
+  const settingsPage = await request(base, `/admin/${slug}/configuracoes`, 'GET', undefined, cookie);
+  const settingsHtml = await settingsPage.response.text();
+  assert.equal(settingsPage.response.status, 200);
+  assert.ok(settingsHtml.includes(pixSettings.pixKey) && settingsHtml.includes(pixSettings.pixReceiverName.trim()) &&
+    settingsHtml.includes(pixSettings.pixReceiverCity.trim()), 'formulário exibe os dados Pix salvos');
+  const currentReservation = await reserve(7, '79999990007');
+  assert.equal(currentReservation.response.status, 200);
+  const currentPayload = String((await client.execute({ sql: 'SELECT pix_payload FROM reservations WHERE id = ?', args: [currentReservation.body.reservationId] })).rows[0].pix_payload);
+  assert.ok(currentPayload.includes(pixField('01', pixSettings.pixKey)), 'nova reserva usa nova chave Pix');
+  assert.ok(currentPayload.includes(pixField('59', 'MAE DA MARIA')), 'nome do Pix é normalizado para o payload');
+  assert.ok(currentPayload.includes(pixField('60', 'ARACAJU')), 'cidade do Pix é normalizada para o payload');
+  assert.ok(newPixPayload.includes(pixField('01', originalPix.pixKey)), 'reserva criada antes da mudança mantém o código Pix anterior');
+  assert.equal((await updateSettings({ ...settingsWithNewPix, pixKey: '' })).response.status, 400, 'chave Pix não pode ficar vazia');
+  for (const item of [oldPrice, newPrice, currentReservation]) {
     assert.equal((await request(base, `/api/admin/${slug}/reservation/${item.body.reservationId}`, 'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
   }
   const homeAfterSettings = await request(base, `/${slug}`);
@@ -223,7 +252,7 @@ async function main() {
   const resultHtml = await snapshottedResult.response.text();
   assert.ok(/R\$\s?110,00/.test(resultHtml), 'resultado conserva o primeiro prêmio');
   assert.ok(/R\$\s?60,00/.test(resultHtml), 'resultado conserva o segundo prêmio');
-  assert.equal((await updateSettings(initialSettings)).response.status, 409, 'configurações ficam protegidas após sorteio');
+  assert.equal((await updateSettings(settingsWithNewPix)).response.status, 409, 'configurações ficam protegidas após sorteio');
   assert.equal((await reserve(5, '79999990005')).response.status, 409, 'não aceita reservas após sorteio');
   assert.equal((await request(base, `/api/admin/${slug}/reservation/${second.body.reservationId}`, 'PATCH', { status: 'pending' }, cookie)).response.status, 409, 'não altera elegibilidade após sorteio');
   assert.equal((await request(base, `/api/admin/${slug}/draw`, 'POST', undefined, cookie)).response.status, 409, 'não repete sorteio');

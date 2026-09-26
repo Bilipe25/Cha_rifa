@@ -1,10 +1,8 @@
+import { normalizePixMerchantText } from './pix-format';
+
 function field(id: string, value: string) {
   if (value.length > 99) throw new Error('Campo Pix muito longo');
   return id + String(value.length).padStart(2, '0') + value;
-}
-
-function ascii(value: string, max: number) {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9 .-]/g, '').trim().toUpperCase().slice(0, max);
 }
 
 function crc16(value: string) {
@@ -23,7 +21,7 @@ export function createPixPayload({ key, receiverName, city, amountCents, txid }:
   if (key.trim().length > 77) throw new Error('Chave Pix muito longa');
   const merchantAccount = field('00', 'br.gov.bcb.pix') + field('01', key.trim());
   const payload = field('00', '01') + field('26', merchantAccount) + field('52', '0000') + field('53', '986') +
-    field('54', (amountCents / 100).toFixed(2)) + field('58', 'BR') + field('59', ascii(receiverName, 25)) +
-    field('60', ascii(city, 15)) + field('62', field('05', ascii(txid, 25))) + '6304';
+    field('54', (amountCents / 100).toFixed(2)) + field('58', 'BR') + field('59', normalizePixMerchantText(receiverName).slice(0, 25)) +
+    field('60', normalizePixMerchantText(city).slice(0, 15)) + field('62', field('05', normalizePixMerchantText(txid).slice(0, 25))) + '6304';
   return payload + crc16(payload);
 }

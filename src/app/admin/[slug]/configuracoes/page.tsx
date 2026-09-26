@@ -23,6 +23,9 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
         prizeTwoCents: raffle.prizeTwoCents,
         pricePerNumberCents: raffle.pricePerNumberCents,
         totalNumbers: raffle.totalNumbers,
+        pixKey: raffle.pixKey ?? '',
+        pixReceiverName: raffle.pixReceiverName ?? '',
+        pixReceiverCity: raffle.pixReceiverCity ?? '',
       }}
     />
   </ThemeFrame>;

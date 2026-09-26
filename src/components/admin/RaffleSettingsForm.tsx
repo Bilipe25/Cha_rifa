@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/ui/Icons';
 import { formatMoney } from '@/lib/currency';
+import { normalizePixMerchantText } from '@/lib/pix-format';
 
 type Settings = {
   drawDate: string;
@@ -12,6 +13,9 @@ type Settings = {
   prizeTwoCents: number;
   pricePerNumberCents: number;
   totalNumbers: number;
+  pixKey: string;
+  pixReceiverName: string;
+  pixReceiverCity: string;
 };
 
 function parseBrl(value: string) {
@@ -32,6 +36,9 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
   const [prizeTwo, setPrizeTwo] = useState(formatMoney(initial.prizeTwoCents));
   const [price, setPrice] = useState(formatMoney(initial.pricePerNumberCents));
   const [quantity, setQuantity] = useState(String(initial.totalNumbers));
+  const [pixKey, setPixKey] = useState(initial.pixKey);
+  const [pixReceiverName, setPixReceiverName] = useState(initial.pixReceiverName);
+  const [pixReceiverCity, setPixReceiverCity] = useState(initial.pixReceiverCity);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -64,10 +71,20 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
       prizeTwoCents: parseBrl(prizeTwo),
       pricePerNumberCents: parseBrl(price),
       totalNumbers: Number(quantity),
+      pixKey: pixKey.trim(),
+      pixReceiverName: pixReceiverName.trim(),
+      pixReceiverCity: pixReceiverCity.trim(),
     };
     if (values.prizeOneCents === null || values.prizeTwoCents === null || values.pricePerNumberCents === null ||
       values.pricePerNumberCents < 1 || !Number.isInteger(values.totalNumbers) || values.totalNumbers < 1 || values.totalNumbers > 1000) {
       setError('Confira os valores e escolha uma quantidade entre 1 e 1000 números.');
+      return;
+    }
+    const normalizedReceiver = normalizePixMerchantText(values.pixReceiverName);
+    const normalizedCity = normalizePixMerchantText(values.pixReceiverCity);
+    if (!values.pixKey || values.pixKey.length > 77 || !normalizedReceiver || normalizedReceiver.length > 25 ||
+      !normalizedCity || normalizedCity.length > 15) {
+      setError('Preencha a chave Pix, o nome do recebedor (até 25 caracteres) e a cidade (até 15).');
       return;
     }
     const next = values as Settings;
@@ -122,6 +139,16 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
         <input type="number" min="1" max="1000" step="1" value={quantity} onChange={event => setQuantity(event.target.value)} required disabled={drawn || busy}/>
       </label>
       <p className="settings-help">Você pode ter de 1 a 1000 números. Números já reservados ou pagos ficam protegidos.</p>
+      <label className="field-label">Chave Pix
+        <input type="text" autoCapitalize="none" spellCheck={false} maxLength={77} value={pixKey} onChange={event => setPixKey(event.target.value)} placeholder="CPF, e-mail, telefone ou chave aleatória" required disabled={drawn || busy}/>
+      </label>
+      <label className="field-label">Nome do recebedor
+        <input type="text" maxLength={25} value={pixReceiverName} onChange={event => setPixReceiverName(event.target.value)} required disabled={drawn || busy}/>
+      </label>
+      <label className="field-label">Cidade do recebedor
+        <input type="text" maxLength={15} value={pixReceiverCity} onChange={event => setPixReceiverCity(event.target.value)} required disabled={drawn || busy}/>
+      </label>
+      <p className="settings-help">Os dados Pix atualizados valem para novas reservas. Códigos Pix já gerados continuam iguais. Nome e cidade são ajustados ao formato do Pix.</p>
       {error && <p className="inline-notice" role="alert">{error}</p>}
       {success && <p className="inline-notice settings-success" role="status">{success}</p>}
       {!drawn && <button ref={saveButton} type="submit" className="primary-button" disabled={busy}><span>{busy ? 'SALVANDO...' : 'SALVAR ALTERAÇÕES'}</span></button>}
