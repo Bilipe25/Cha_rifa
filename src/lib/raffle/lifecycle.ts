@@ -6,9 +6,11 @@ import { client } from '@/db';
 
 export async function expirePendingReservations(raffleId: string) {
   const now = new Date().toISOString();
+  const legacyDeadline = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const due = await client.execute({
-    sql: `SELECT id FROM reservations WHERE raffle_id = ? AND status = 'pending' AND expires_at IS NOT NULL AND expires_at <= ? LIMIT 200`,
-    args: [raffleId, now],
+    sql: `SELECT id FROM reservations WHERE raffle_id = ? AND status = 'pending' AND
+          (expires_at <= ? OR (expires_at IS NULL AND created_at <= ?)) LIMIT 200`,
+    args: [raffleId, now, legacyDeadline],
   });
   if (!due.rows.length) return;
   const transaction = await client.transaction('write');
@@ -17,8 +19,9 @@ export async function expirePendingReservations(raffleId: string) {
       const reservationId = String(row.id);
       const changed = await transaction.execute({
         sql: `UPDATE reservations SET status = 'cancelled', cancelled_at = ?, cancel_reason = 'expired'
-              WHERE id = ? AND raffle_id = ? AND status = 'pending' AND expires_at <= ?`,
-        args: [now, reservationId, raffleId, now],
+              WHERE id = ? AND raffle_id = ? AND status = 'pending' AND
+                (expires_at <= ? OR (expires_at IS NULL AND created_at <= ?))`,
+        args: [now, reservationId, raffleId, now, legacyDeadline],
       });
       if (!changed.rowsAffected) continue;
       await transaction.execute({

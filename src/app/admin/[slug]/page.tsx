@@ -8,6 +8,7 @@ import { requireAdmin } from '@/lib/auth';
 import { getAdminStats } from '@/lib/raffle';
 import { ShareRaffleButton } from '@/components/admin/ShareRaffleButton';
 import { InstallAdminApp } from '@/components/admin/InstallAdminApp';
+import { AdminRefresh } from '@/components/admin/AdminRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,7 @@ export default async function AdminPage({ params }: { params: Promise<{ slug: st
   const raffle = await requireAdmin(slug);
   const stats = await getAdminStats(raffle.id, raffle.totalNumbers);
   return <ThemeFrame variant="admin" theme={getTheme(raffle.themeKey)!}>
+    <AdminRefresh/>
     <div className="admin-panel panel-flow">
       <div className="admin-topline"><span>Resumo da rifa</span><Link href={`/${slug}`}>Ver página da rifa</Link></div>
       <div className="stat-card stat-card--featured"><span>Números reservados</span><strong>{stats.reserved}<small>/{stats.totalNumbers}</small></strong><div className="progress-track"><i style={{ width: `${stats.reserved / stats.totalNumbers * 100}%` }}/></div></div>

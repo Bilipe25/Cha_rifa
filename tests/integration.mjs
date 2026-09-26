@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID, scryptSync } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
+import { runVisualCheck } from './visual-check.mjs';
 
 const dbFile = `integration-${randomUUID()}.db`;
 const url = `file:${dbFile}`;
@@ -76,11 +77,21 @@ async function main() {
     await delay(200);
   }
 
-  const reserve = async (number, phone) => request(base, `/api/${slug}/reserve`, 'POST', { numbers: [number], name: 'Pessoa de Teste', phone });
+  const reserve = async (number, phone, ip) => request(base, `/api/${slug}/reserve`, 'POST',
+    { numbers: [number], name: 'Pessoa de Teste', phone }, undefined,
+    ip ? { 'x-vercel-forwarded-for': ip } : {});
   const first = await reserve(1, '79999990001');
   assert.equal(first.response.status, 200);
+  const firstStatus = await request(base, `/api/${slug}/payment/${first.body.reservationId}`);
+  assert.equal(firstStatus.body.status, 'pending', 'consulta pública da própria reserva informa estado atual');
+  assert.equal(firstStatus.response.headers.get('cache-control'), 'no-store');
   assert.equal((await request(base, `/api/${slug}/reserve`, 'POST', { numbers: Array.from({ length: 11 }, (_, i) => i + 10), name: 'Pessoa de Teste', phone: '79999990009' })).response.status, 400, 'limite de números por reserva');
   assert.equal((await reserve(1, '79999990002')).response.status, 409, 'número não pode ser reservado duas vezes');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    assert.equal((await reserve(1, '79999990150', '198.51.100.40')).response.status, 409);
+  }
+  const afterConflicts = await reserve(50, '79999990150', '198.51.100.40');
+  assert.equal(afterConflicts.response.status, 200, 'conflitos não consomem a cota de reservas do telefone');
   const lookup = await request(base, `/api/${slug}/my-numbers`, 'POST', { phone: '79999990001' });
   assert.equal(lookup.response.status, 200);
   assert.deepEqual(lookup.body.reservations[0].numbers, [1]);
@@ -96,6 +107,9 @@ async function main() {
   const [lateRow] = (await client.execute({ sql: 'SELECT status, late_payment_reported_at FROM reservations WHERE id = ?', args: [first.body.reservationId] })).rows;
   assert.equal(lateRow.status, 'cancelled');
   assert.ok(lateRow.late_payment_reported_at);
+  const lateStatus = await request(base, `/api/${slug}/payment/${first.body.reservationId}`);
+  assert.equal(lateStatus.body.status, 'cancelled');
+  assert.equal(lateStatus.body.latePaymentReported, true);
   assert.equal((await request(base, `/api/${slug}/payment/${first.body.reservationId}`, 'POST')).body.late, true, 'aviso tardio é idempotente');
 
   assert.equal((await request(base, `/api/admin/${slug}/login`, 'POST', { password: 'wrong' })).response.status, 401);
@@ -105,7 +119,20 @@ async function main() {
   assert.equal(login.response.status, 200);
   const cookie = login.response.headers.get('set-cookie')?.split(';')[0];
   assert.ok(cookie);
+  if (process.env.VISUAL_CHECK_OUTPUT) await runVisualCheck(base, slug, cookie, process.env.VISUAL_CHECK_OUTPUT);
   assert.match(cookie, /^charifa_session_maria-antonella=/);
+  assert.equal((await request(base, `/api/admin/${slug}/reservation/${afterConflicts.body.reservationId}`,
+    'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
+  const successfulQuota = [];
+  for (const number of [150, 151, 152]) {
+    const booking = await reserve(number, '79999990151', '198.51.100.41');
+    assert.equal(booking.response.status, 200);
+    successfulQuota.push(booking.body.reservationId);
+  }
+  assert.equal((await reserve(153, '79999990151', '198.51.100.41')).response.status, 429,
+    'somente três reservas concluídas são permitidas por telefone no dia');
+  for (const id of successfulQuota) assert.equal((await request(base, `/api/admin/${slug}/reservation/${id}`,
+    'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
 
   const helenaId = randomUUID();
   const passwordHash = (await client.execute({ sql: 'SELECT admin_password_hash FROM raffles WHERE id = ?', args: [raffleId] })).rows[0].admin_password_hash;
@@ -155,7 +182,9 @@ async function main() {
   assert.equal((await updateSettings({ ...initialSettings, pricePerNumberCents: -1 })).response.status, 400);
   assert.equal((await updateSettings({ ...initialSettings, drawDate: '2026-02-31' })).response.status, 400);
   assert.equal((await updateSettings({ ...initialSettings, totalNumbers: 1001 })).response.status, 400);
+  assert.equal((await updateSettings({ ...initialSettings, totalNumbers: 1 })).response.status, 400, 'dois prêmios exigem ao menos dois números');
   assert.equal((await updateSettings({ ...initialSettings, pixKey: 'x'.repeat(78) })).response.status, 400, 'chave Pix tem limite de 77 caracteres');
+  assert.equal((await updateSettings({ ...initialSettings, pixKey: '123.456.789-00' })).response.status, 400, 'chave Pix inválida não pode ser gravada');
   assert.equal((await updateSettings({ ...initialSettings, pixReceiverName: 'N'.repeat(26) })).response.status, 400, 'nome Pix tem limite de 25 caracteres');
   assert.equal((await updateSettings({ ...initialSettings, pixReceiverCity: 'C'.repeat(16) })).response.status, 400, 'cidade Pix tem limite de 15 caracteres');
   assert.equal((await updateSettings({ ...initialSettings, pixReceiverName: '😀' })).response.status, 400, 'nome precisa conter texto aceito pelo Pix');
@@ -175,6 +204,10 @@ async function main() {
   assert.equal(oldPrice.response.status, 200);
   assert.equal(Number((await client.execute({ sql: 'SELECT total_cents FROM reservations WHERE id = ?', args: [oldPrice.body.reservationId] })).rows[0].total_cents), 500);
   assert.equal((await updateSettings({ ...initialSettings, pricePerNumberCents: 600 })).response.status, 200);
+  const changedPrice = await request(base, `/api/${slug}/reserve`, 'POST',
+    { numbers: [6], name: 'Pessoa de Teste', phone: '79999990006', expectedPriceCents: 500 });
+  assert.equal(changedPrice.response.status, 409, 'preço desatualizado pede nova confirmação');
+  assert.equal(changedPrice.body.priceCents, 600);
   const newPrice = await reserve(6, '79999990006');
   assert.equal(newPrice.response.status, 200);
   const priceRows = (await client.execute({ sql: 'SELECT id, total_cents, pix_payload FROM reservations WHERE id IN (?, ?)', args: [oldPrice.body.reservationId, newPrice.body.reservationId] })).rows;
@@ -204,6 +237,10 @@ async function main() {
   assert.ok(currentPayload.includes(pixField('60', 'ARACAJU')), 'cidade do Pix é normalizada para o payload');
   assert.ok(newPixPayload.includes(pixField('01', originalPix.pixKey)), 'reserva criada antes da mudança mantém o código Pix anterior');
   assert.equal((await updateSettings({ ...settingsWithNewPix, pixKey: '' })).response.status, 400, 'chave Pix não pode ficar vazia');
+  await client.execute({ sql: 'UPDATE raffles SET pix_receiver_city = ? WHERE id = ?', args: ['Campo do Brito - SE', raffleId] });
+  assert.equal((await updateSettings({ ...settingsWithNewPix, pixReceiverCity: 'Campo do Brito - SE' })).response.status, 200,
+    'alterações não Pix continuam possíveis com cidade legada');
+  assert.equal((await updateSettings(settingsWithNewPix)).response.status, 200, 'nova cidade substitui o exemplo antigo');
   for (const item of [oldPrice, newPrice, currentReservation]) {
     assert.equal((await request(base, `/api/admin/${slug}/reservation/${item.body.reservationId}`, 'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
   }
@@ -215,9 +252,6 @@ async function main() {
   assert.equal((await request(base, '/api/internal/cleanup-rate-limits', 'GET', undefined, undefined,
     { Authorization: `Bearer ${cronSecret}` })).response.status, 200);
   assert.equal(Number((await client.execute({ sql: `SELECT COUNT(*) AS total FROM rate_limit_buckets WHERE key = 'expired-test'` })).rows[0].total), 0);
-
-  const resolved = await request(base, `/api/admin/${slug}/late-payment/${first.body.reservationId}`, 'POST', { note: 'Reembolso combinado com a pessoa' }, cookie);
-  assert.equal(resolved.response.status, 200);
 
   const close = await request(base, `/api/admin/${slug}/lifecycle`, 'POST', { action: 'close' }, cookie);
   assert.equal(close.response.status, 200);
@@ -239,6 +273,10 @@ async function main() {
   await client.execute({ sql: `UPDATE raffles SET draw_date = '2020-01-01' WHERE id = ?`, args: [raffleId] });
   assert.equal((await request(base, `/api/admin/${slug}/draw`, 'POST', undefined, cookie)).response.status, 409, 'pagamento pendente bloqueia sorteio');
   assert.equal((await request(base, `/api/admin/${slug}/reservation/${pending.body.reservationId}`, 'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
+  assert.equal((await request(base, `/api/admin/${slug}/draw`, 'POST', undefined, cookie)).response.status, 409,
+    'pagamento tardio sem solução bloqueia sorteio');
+  const resolved = await request(base, `/api/admin/${slug}/late-payment/${first.body.reservationId}`, 'POST', { note: 'Reembolso combinado com a pessoa' }, cookie);
+  assert.equal(resolved.response.status, 200);
   assert.equal((await request(base, `/api/admin/${slug}/draw`, 'POST', undefined, cookie)).response.status, 200);
   const publicResult = await request(base, `/${slug}/resultado`);
   assert.equal(publicResult.response.status, 200);

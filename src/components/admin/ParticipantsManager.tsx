@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/ui/Icons';
@@ -12,16 +12,25 @@ type Person = { id: string; name: string; phone: string; phoneNormalized: string
 const labels: Record<string, string> = { pending: 'Reservado', payment_reported: 'Aguardando confirmação', paid: 'Pago', cancelled: 'Liberado' };
 const dateTime = (value: string) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Fortaleza' }).format(new Date(value));
 
-export function ParticipantsManager({ slug, people }: { slug: string; people: Person[] }) {
+export function ParticipantsManager({ slug, people, drawn }: { slug: string; people: Person[]; drawn: boolean }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible' && !busy) router.refresh(); };
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => { window.clearInterval(interval); window.removeEventListener('focus', refresh); };
+  }, [busy, router]);
   const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR');
   const digits = query.replace(/\D/g, '');
+  const exactNumber = /^\d{1,3}$/.test(query.trim()) && people.some(person => person.numbers.includes(Number(digits)))
+    ? Number(digits) : null;
   const filtered = people.filter(person => {
+    if (exactNumber !== null) return person.numbers.includes(exactNumber);
     const matchesQuery = !normalizedQuery || person.name.toLocaleLowerCase('pt-BR').includes(normalizedQuery)
-      || (digits.length >= 2 && (person.phoneNormalized.includes(digits) || person.numbers.some(number => String(number).padStart(2, '0').includes(digits))));
+      || (digits.length >= 2 && person.phoneNormalized.includes(digits));
     return matchesQuery;
   });
   async function update(person: Person, status: 'paid' | 'pending' | 'cancelled') {
@@ -31,9 +40,10 @@ export function ParticipantsManager({ slug, people }: { slug: string; people: Pe
     setBusy(person.id); setError('');
     try {
       const response = await fetch(`/api/admin/${slug}/reservation/${person.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-      if (!response.ok) throw new Error();
+      if (response.status === 401) { router.replace(`/admin/${slug}/login`); return; }
+      if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível atualizar.');
       router.refresh();
-    } catch { setError('Não foi possível atualizar. Tente novamente.'); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar. Tente novamente.'); }
     finally { setBusy(''); }
   }
   async function resolveLate(person: Person) {
@@ -45,14 +55,16 @@ export function ParticipantsManager({ slug, people }: { slug: string; people: Pe
       const response = await fetch(`/api/admin/${slug}/late-payment/${person.id}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note }),
       });
-      if (!response.ok) throw new Error();
+      if (response.status === 401) { router.replace(`/admin/${slug}/login`); return; }
+      if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível registrar a solução.');
       router.refresh();
-    } catch { setError('Não foi possível registrar a solução. Tente novamente.'); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível registrar a solução. Tente novamente.'); }
     finally { setBusy(''); }
   }
   return <div className="participants-panel panel-layout">
     <Link className="back-link" href={`/admin/${slug}`}><Icon name="back" size={18}/> Voltar ao painel</Link>
-    <div className="panel-heading"><h2>Participantes</h2><p>{people.length} {people.length === 1 ? 'pessoa participou' : 'pessoas participaram'}</p></div>
+    <div className="panel-heading"><h2>Participantes</h2><p>{people.length} {people.length === 1 ? 'reserva registrada' : 'reservas registradas'}</p></div>
+    {drawn && <p className="inline-notice">Sorteio concluído. Os pagamentos e números estão preservados.</p>}
     <label className="field-label participant-search">Buscar por nome, telefone ou número<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Ex.: Maria, 79 ou 18"/></label>
     {error && <p className="inline-notice" role="alert">{error}</p>}
     <div className="participants-scroll">
@@ -62,7 +74,7 @@ export function ParticipantsManager({ slug, people }: { slug: string; people: Pe
         <p>{person.phone} · Reservou em {dateTime(person.createdAt)}</p><div className="participant-detail"><span>Números {person.numbers.map(formatNumber).join(', ')}</span><b>{formatMoney(person.totalCents)}</b></div>
         {person.status === 'pending' && person.expiresAt && <p className="participant-deadline">Prazo até {dateTime(person.expiresAt)}</p>}
         {person.latePaymentReportedAt && <p className="admin-alert">Pagamento informado após o prazo em {dateTime(person.latePaymentReportedAt)}. {person.latePaymentResolvedAt ? 'Solução registrada.' : 'Confira com a pessoa antes de encerrar.'}</p>}
-        {person.status !== 'cancelled' && <div className="participant-actions">
+        {!drawn && person.status !== 'cancelled' && <div className="participant-actions">
           {person.status !== 'paid' && <button disabled={busy === person.id} onClick={() => update(person, 'paid')}>Confirmar pagamento</button>}
           {person.status === 'paid' && <button disabled={busy === person.id} onClick={() => update(person, 'pending')}>Marcar como pendente</button>}
           <button disabled={busy === person.id} onClick={() => update(person, 'cancelled')}>Liberar números</button>

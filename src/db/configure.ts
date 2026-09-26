@@ -7,6 +7,8 @@ async function main() {
   const { db } = await import('./index');
   const { raffles } = await import('./schema');
   const { hashPassword } = await import('../lib/password');
+  const { normalizePixKey } = await import('../lib/pix-key');
+  const { normalizePixMerchantText } = await import('../lib/pix-format');
   const { eq, sql } = await import('drizzle-orm');
   const slug = process.env.RAFFLE_SLUG || 'maria-antonella';
   const [raffle] = await db.select({ id: raffles.id }).from(raffles).where(eq(raffles.slug, slug));
@@ -15,9 +17,16 @@ async function main() {
   const pixValues = [process.env.SEED_PIX_KEY, process.env.SEED_PIX_RECEIVER_NAME, process.env.SEED_PIX_RECEIVER_CITY];
   if (pixValues.some(Boolean)) {
     if (!pixValues.every(Boolean)) throw new Error('Preencha as três variáveis SEED_PIX_* para configurar Pix.');
-    changes.pixKey = process.env.SEED_PIX_KEY;
-    changes.pixReceiverName = process.env.SEED_PIX_RECEIVER_NAME;
-    changes.pixReceiverCity = process.env.SEED_PIX_RECEIVER_CITY;
+    const key = normalizePixKey(process.env.SEED_PIX_KEY!);
+    const name = process.env.SEED_PIX_RECEIVER_NAME!.trim();
+    const city = process.env.SEED_PIX_RECEIVER_CITY!.trim();
+    if (!key || !name || name.length > 25 || !city || city.length > 15 ||
+      !normalizePixMerchantText(name) || !normalizePixMerchantText(city)) {
+      throw new Error('Confira o formato da chave Pix, o nome (até 25) e a cidade (até 15 caracteres).');
+    }
+    changes.pixKey = key;
+    changes.pixReceiverName = name;
+    changes.pixReceiverCity = city;
   }
   if (process.env.SEED_ADMIN_PASSWORD) {
     if (process.env.SEED_ADMIN_PASSWORD.length < 12) throw new Error('SEED_ADMIN_PASSWORD precisa ter pelo menos 12 caracteres.');
