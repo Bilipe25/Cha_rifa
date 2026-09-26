@@ -21,6 +21,7 @@ export function DrawManager({ slug, eligibleNumbers, winners, prizeOneCents, pri
   useEffect(() => {
     if (!confirm) return;
     const dialog = dialogRef.current;
+    const openButton = openButtonRef.current;
     const first = dialog?.querySelector<HTMLButtonElement>('button');
     first?.focus();
     function onKeyDown(event: KeyboardEvent) {
@@ -33,7 +34,7 @@ export function DrawManager({ slug, eligibleNumbers, winners, prizeOneCents, pri
       else if (!event.shiftKey && document.activeElement === lastButton) { event.preventDefault(); firstButton.focus(); }
     }
     document.addEventListener('keydown', onKeyDown);
-    return () => { document.removeEventListener('keydown', onKeyDown); openButtonRef.current?.focus(); };
+    return () => { document.removeEventListener('keydown', onKeyDown); openButton?.focus(); };
   }, [confirm]);
   async function changeLifecycle(action: 'close' | 'reopen') {
     const prompt = action === 'close'

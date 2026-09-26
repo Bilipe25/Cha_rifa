@@ -1,3 +1,4 @@
+import { getTheme } from '@/config/themes';
 import { ThemeFrame } from '@/components/theme/ThemeFrame';
 import { DrawManager } from '@/components/admin/DrawManager';
 import { requireAdmin } from '@/lib/auth';
@@ -15,5 +16,5 @@ export default async function DrawPage({ params }: { params: Promise<{ slug: str
     const person = people.find(item => item.id === draw.reservationId);
     return { position: draw.prizePosition, number: draw.winningNumber, name: person?.participantName ?? '', phone: person?.phone ?? '' };
   });
-  return <ThemeFrame kind="admin" themeKey={raffle.themeKey}><DrawManager slug={slug} eligibleNumbers={eligibleNumbers} winners={winners} prizeOneCents={raffle.prizeOneCents} prizeTwoCents={raffle.prizeTwoCents} raffleStatus={raffle.status} unresolved={unresolved} drawDateReached={raffle.drawDate <= todayInFortaleza()}/></ThemeFrame>;
+  return <ThemeFrame variant="admin" theme={getTheme(raffle.themeKey)!}><DrawManager slug={slug} eligibleNumbers={eligibleNumbers} winners={winners} prizeOneCents={raffle.prizeOneCents} prizeTwoCents={raffle.prizeTwoCents} raffleStatus={raffle.status} unresolved={unresolved} drawDateReached={raffle.drawDate <= todayInFortaleza()}/></ThemeFrame>;
 }

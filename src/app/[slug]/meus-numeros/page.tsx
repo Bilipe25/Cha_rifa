@@ -10,5 +10,5 @@ export default async function MyNumbersPage({ params }: { params: Promise<{ slug
   const { slug } = await params;
   const raffle = await getRaffle(slug);
   if (!raffle || !getTheme(raffle.themeKey)) notFound();
-  return <ThemeFrame themeKey={raffle.themeKey} kind="guest"><h1 className="sr-only">{raffle.title}</h1><MyNumbersLookup slug={slug}/></ThemeFrame>;
+  return <ThemeFrame theme={getTheme(raffle.themeKey)!} variant="guest"><h1 className="sr-only">{raffle.title}</h1><MyNumbersLookup slug={slug}/></ThemeFrame>;
 }
