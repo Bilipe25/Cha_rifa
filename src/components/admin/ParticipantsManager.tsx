@@ -14,19 +14,15 @@ const dateTime = (value: string) => new Intl.DateTimeFormat('pt-BR', { dateStyle
 
 export function ParticipantsManager({ slug, people }: { slug: string; people: Person[] }) {
   const router = useRouter();
-  const [filter, setFilter] = useState<'all' | 'pending' | 'reported' | 'paid' | 'late'>('all');
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR');
   const digits = query.replace(/\D/g, '');
   const filtered = people.filter(person => {
-    const matchesStatus = filter === 'all' || (filter === 'late'
-      ? Boolean(person.latePaymentReportedAt && !person.latePaymentResolvedAt)
-      : person.status === (filter === 'reported' ? 'payment_reported' : filter));
     const matchesQuery = !normalizedQuery || person.name.toLocaleLowerCase('pt-BR').includes(normalizedQuery)
       || (digits.length >= 2 && (person.phoneNormalized.includes(digits) || person.numbers.some(number => String(number).padStart(2, '0').includes(digits))));
-    return matchesStatus && matchesQuery;
+    return matchesQuery;
   });
   async function update(person: Person, status: 'paid' | 'pending' | 'cancelled') {
     if (status === 'cancelled' && !window.confirm(person.status === 'paid'
@@ -58,13 +54,9 @@ export function ParticipantsManager({ slug, people }: { slug: string; people: Pe
     <Link className="back-link" href={`/admin/${slug}`}><Icon name="back" size={18}/> Voltar ao painel</Link>
     <div className="panel-heading"><h2>Participantes</h2><p>{people.length} {people.length === 1 ? 'pessoa participou' : 'pessoas participaram'}</p></div>
     <label className="field-label participant-search">Buscar por nome, telefone ou número<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Ex.: Maria, 79 ou 18"/></label>
-    <div className="filter-row" role="group" aria-label="Filtrar participantes">
-      {([['all','Todos'],['pending','Sem pagamento'],['reported','Avisaram que pagaram'],['paid','Pagos'],['late','Após o prazo']] as const).map(([value, label]) =>
-        <button type="button" key={value} className={filter === value ? 'active' : ''} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}
-    </div>
     {error && <p className="inline-notice" role="alert">{error}</p>}
     <div className="participants-scroll">
-      {!filtered.length && <p className="empty-state">Nenhuma reserva corresponde à busca ou ao filtro.</p>}
+      {!filtered.length && <p className="empty-state">Nenhuma reserva corresponde à busca.</p>}
       {filtered.map(person => <article className="participant-card" key={person.id}>
         <div className="participant-header"><strong>{person.name}</strong><span className={`status-badge status-badge--${person.status}`}>{labels[person.status]}</span></div>
         <p>{person.phone} · Reservou em {dateTime(person.createdAt)}</p><div className="participant-detail"><span>Números {person.numbers.map(formatNumber).join(', ')}</span><b>{formatMoney(person.totalCents)}</b></div>
