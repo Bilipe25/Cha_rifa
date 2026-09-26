@@ -18,9 +18,9 @@ function secret() {
 
 function signature(value: string) { return createHmac('sha256', secret()).update(value).digest('hex'); }
 
-export async function setAdminSession(slug: string) {
-  const expires = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  const value = `${slug}.${expires}`;
+export async function setAdminSession(slug: string, sessionVersion: number) {
+  const expires = Date.now() + 24 * 60 * 60 * 1000;
+  const value = `${slug}.${expires}.${sessionVersion}`;
   (await cookies()).set(cookieName, `${value}.${signature(value)}`, {
     httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', expires: new Date(expires),
   });
@@ -31,11 +31,13 @@ export async function clearAdminSession() { (await cookies()).delete(cookieName)
 export async function isAdmin(slug: string) {
   const token = (await cookies()).get(cookieName)?.value;
   if (!token) return false;
-  const [savedSlug, expires, mac] = token.split('.');
-  if (savedSlug !== slug || !expires || !mac || Number(expires) < Date.now()) return false;
+  const [savedSlug, expires, version, mac] = token.split('.');
+  if (savedSlug !== slug || !expires || !version || !mac || Number(expires) < Date.now()) return false;
   const actual = Buffer.from(mac, 'hex');
-  const expected = Buffer.from(signature(`${savedSlug}.${expires}`), 'hex');
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  const expected = Buffer.from(signature(`${savedSlug}.${expires}.${version}`), 'hex');
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return false;
+  const [raffle] = await db.select({ sessionVersion: raffles.sessionVersion }).from(raffles).where(eq(raffles.slug, slug));
+  return raffle?.sessionVersion === Number(version);
 }
 
 export async function requireAdmin(slug: string) {

@@ -16,6 +16,9 @@ export const raffles = sqliteTable('raffles', {
   pixReceiverCity: text('pix_receiver_city'),
   adminPasswordHash: text('admin_password_hash').notNull(),
   status: text('status').notNull().default('active'),
+  closedAt: text('closed_at'),
+  drawnAt: text('drawn_at'),
+  sessionVersion: integer('session_version').notNull().default(1),
   createdAt: text('created_at').notNull(),
 });
 
@@ -40,8 +43,12 @@ export const reservations = sqliteTable('reservations', {
   pixTxid: text('pix_txid').notNull(),
   pixPayload: text('pix_payload').notNull(),
   paymentReportedAt: text('payment_reported_at'),
+  latePaymentReportedAt: text('late_payment_reported_at'),
+  latePaymentResolvedAt: text('late_payment_resolved_at'),
   paidAt: text('paid_at'),
   cancelledAt: text('cancelled_at'),
+  cancelReason: text('cancel_reason'),
+  expiresAt: text('expires_at'),
   createdAt: text('created_at').notNull(),
 });
 
@@ -59,3 +66,20 @@ export const draws = sqliteTable('draws', {
   reservationId: text('reservation_id').notNull().references(() => reservations.id),
   createdAt: text('created_at').notNull(),
 }, (table) => [uniqueIndex('raffle_draw_position_unique').on(table.raffleId, table.prizePosition)]);
+
+export const rateLimitBuckets = sqliteTable('rate_limit_buckets', {
+  key: text('key').primaryKey(),
+  hits: integer('hits').notNull(),
+  resetsAt: integer('resets_at').notNull(),
+});
+
+export const reservationEvents = sqliteTable('reservation_events', {
+  id: text('id').primaryKey(),
+  raffleId: text('raffle_id').notNull().references(() => raffles.id),
+  reservationId: text('reservation_id').notNull().references(() => reservations.id),
+  fromStatus: text('from_status'),
+  toStatus: text('to_status').notNull(),
+  actor: text('actor').notNull(),
+  note: text('note'),
+  createdAt: text('created_at').notNull(),
+});

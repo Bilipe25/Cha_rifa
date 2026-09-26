@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { Icon } from '@/components/ui/Icons';
 import { formatMoney, formatNumber } from '@/lib/currency';
 
-export function PixPayment({ slug, reservationId, numbers, totalCents, payload, qr, status }: {
+export function PixPayment({ slug, reservationId, numbers, totalCents, payload, qr, status, expiresAt, cancelReason, latePaymentReported }: {
   slug: string; reservationId: string; numbers: number[]; totalCents: number; payload: string; qr: string; status: string;
+  expiresAt: string | null; cancelReason: string | null; latePaymentReported: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [reported, setReported] = useState(status === 'payment_reported' || status === 'paid');
+  const [reportedLate, setReportedLate] = useState(latePaymentReported);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   async function copy() {
@@ -20,14 +22,23 @@ export function PixPayment({ slug, reservationId, numbers, totalCents, payload, 
     try {
       const response = await fetch(`/api/${slug}/payment/${reservationId}`, { method: 'POST' });
       if (!response.ok) throw new Error();
-      setReported(true);
+      const result = await response.json();
+      if (result.late) setReportedLate(true);
+      else setReported(true);
     } catch { setError('Não conseguimos registrar agora. Tente novamente.'); }
     finally { setBusy(false); }
   }
-  if (status === 'cancelled') return <div className="panel-flow"><div className="panel-heading"><h2>Reserva encerrada</h2><p>Esses números foram liberados. Você pode escolher outros.</p></div><a className="primary-button" href={`/${slug}/numeros`}>ESCOLHER NÚMEROS</a></div>;
+  if (status === 'cancelled') return <div className="panel-flow cancelled-payment"><div className="panel-heading"><h2>Reserva encerrada</h2><p>Esses números foram liberados e o Pix desta reserva não deve mais ser usado.</p></div>
+    <div className="my-number-list">{numbers.map(number => <b key={number}>{formatNumber(number)}</b>)}</div>
+    {cancelReason === 'expired' && (reportedLate ? <p className="inline-notice" role="status">Registramos seu aviso de pagamento após o prazo. A organização irá conferir e combinar uma solução com você.</p>
+      : <><p className="pix-help">Se você já pagou este Pix, avise a organização para que ela confira o valor e combine uma solução. Os números podem ter sido escolhidos por outra pessoa.</p><button className="secondary-button" type="button" onClick={report} disabled={busy}>{busy ? 'AGUARDE...' : 'JÁ PAGUEI ESSE PIX'}</button></>)}
+    <a className="primary-button" href={`/${slug}`}><span>VOLTAR AO INÍCIO</span></a>
+    {error && <p className="inline-notice" role="alert">{error}</p>}
+  </div>;
   return <div className="pix-payment panel-flow">
     <div className="panel-heading"><h2>{status === 'paid' ? 'Pagamento confirmado' : reported ? 'Pagamento informado' : 'Pix gerado'}</h2><p>{reported ? status === 'paid' ? 'Obrigada por participar!' : 'Prontinho! Agora a mamãe vai confirmar o seu pagamento.' : 'Copie o código abaixo para realizar o pagamento'}</p></div>
     <div className="pix-recap"><span>{numbers.length} {numbers.length === 1 ? 'número' : 'números'} · {numbers.map(formatNumber).join(' · ')}</span><strong>{formatMoney(totalCents)}</strong></div>
+    {status === 'pending' && expiresAt && <p className="pix-deadline">Esta reserva fica guardada até {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Fortaleza' }).format(new Date(expiresAt))}. Depois desse prazo, os números podem ser liberados.</p>}
     <img className="pix-qr" src={qr} alt="QR Code para pagar esta reserva por Pix" width={160} height={160}/>
     <label className="pix-code-label" htmlFor="pix-code">Pix Copia e Cola</label>
     <textarea id="pix-code" className="pix-code" readOnly value={payload} onFocus={event => event.currentTarget.select()} rows={2}/>

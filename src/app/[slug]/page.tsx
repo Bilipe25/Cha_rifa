@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/Icons';
 import { getTheme } from '@/config/themes';
 import { formatDrawDate, formatMoney } from '@/lib/currency';
 import { getRaffle } from '@/lib/raffle';
+import { MyNumbersEntry } from '@/components/raffle/MyNumbersEntry';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,9 @@ export default async function HomePage({ params }: { params: Promise<{ slug: str
       </div>
     </section>
     <div className="price-strip"><Icon name="ticket" size={31}/><span>Do número 1 ao {raffle.totalNumbers}<strong>{formatMoney(raffle.pricePerNumberCents)} <small>cada número</small></strong></span></div>
-    <Link href={`/${slug}/numeros`} className="primary-button"><Icon name="ticket" size={24}/><span>ESCOLHER NÚMEROS</span><Icon name="arrow" size={24}/></Link>
+    {raffle.status === 'active' ? <Link href={`/${slug}/numeros`} className="primary-button"><Icon name="ticket" size={24}/><span>ESCOLHER NÚMEROS</span><Icon name="arrow" size={24}/></Link>
+      : raffle.status === 'drawn' ? <Link href={`/${slug}/resultado`} className="primary-button"><Icon name="gift" size={24}/><span>VER RESULTADO</span><Icon name="arrow" size={24}/></Link>
+      : <p className="home-closed">Reservas encerradas. O resultado será publicado após o sorteio.</p>}
+    <MyNumbersEntry slug={slug}/>
   </ThemeFrame>;
 }
