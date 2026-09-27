@@ -29,7 +29,7 @@ async function main() {
     changes.pixReceiverCity = city;
   }
   if (process.env.SEED_ADMIN_PASSWORD) {
-    if (process.env.SEED_ADMIN_PASSWORD.length < 12) throw new Error('SEED_ADMIN_PASSWORD precisa ter pelo menos 12 caracteres.');
+    if (process.env.SEED_ADMIN_PASSWORD.length < 4) throw new Error('SEED_ADMIN_PASSWORD precisa ter pelo menos 4 caracteres.');
     changes.adminPasswordHash = hashPassword(process.env.SEED_ADMIN_PASSWORD);
   }
   if (!Object.keys(changes).length) throw new Error('Defina os dados Pix ou a senha nas variáveis de ambiente.');

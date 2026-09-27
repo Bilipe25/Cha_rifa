@@ -10,7 +10,9 @@ Requisitos: Node.js 20.12+ e npm. Em `C:\projetos\Charifa`:
 npm install
 ```
 
-Copie `.env.example` para `.env.local` e preencha as variáveis. Para desenvolvimento local, `TURSO_DATABASE_URL=file:local.db`. Gere `SESSION_SECRET` com pelo menos 32 caracteres aleatórios. Defina uma `SEED_ADMIN_PASSWORD` com pelo menos 12 caracteres. Mantenha `.env.local` fora do Git.
+Copie `.env.example` para `.env.local` e preencha as variáveis. Para desenvolvimento local, `TURSO_DATABASE_URL=file:local.db`. Gere `SESSION_SECRET` com pelo menos 32 caracteres aleatórios. Defina uma `SEED_ADMIN_PASSWORD` com pelo menos 4 caracteres. Mantenha `.env.local` fora do Git.
+
+A senha mínima de 4 caracteres permite senhas curtas a pedido da responsável. Como o painel é público na internet, uma senha curta é fácil de adivinhar; prefira uma senha longa e exclusiva sempre que possível.
 
 ```bash
 npm run db:migrate

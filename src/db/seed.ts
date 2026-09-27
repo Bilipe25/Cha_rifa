@@ -11,7 +11,7 @@ async function main() {
   const { normalizePixMerchantText } = await import('../lib/pix-format');
   const { eq } = await import('drizzle-orm');
   const password = process.env.SEED_ADMIN_PASSWORD;
-  if (!password || password.length < 12) throw new Error('Defina SEED_ADMIN_PASSWORD com pelo menos 12 caracteres.');
+  if (!password || password.length < 4) throw new Error('Defina SEED_ADMIN_PASSWORD com pelo menos 4 caracteres.');
   const slug = 'maria-antonella';
   const existing = await db.select({ id: raffles.id }).from(raffles).where(eq(raffles.slug, slug));
   if (existing.length) { console.log('Rifa já cadastrada. Seed preservado.'); return; }
