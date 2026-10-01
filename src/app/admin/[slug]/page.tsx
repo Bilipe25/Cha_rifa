@@ -1,6 +1,6 @@
 import { getTheme } from '@/config/themes';
 import { requireAdmin } from '@/lib/auth';
-import { getAdminStats } from '@/lib/raffle';
+import { getAdminStats, getReservationEvents, serializeAdminParticipants } from '@/lib/raffle';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
 import { InstallAdminApp } from '@/components/admin/InstallAdminApp';
 import { AdminRefresh } from '@/components/admin/AdminRefresh';
@@ -11,9 +11,10 @@ export default async function AdminPage({ params }: { params: Promise<{ slug: st
   const { slug } = await params;
   const raffle = await requireAdmin(slug);
   const stats = await getAdminStats(raffle.id, raffle.totalNumbers);
+  const people = serializeAdminParticipants(stats.people, await getReservationEvents(raffle.id));
   return <>
     <AdminRefresh/>
-    <AdminDashboard slug={slug} title={raffle.title} art={getTheme(raffle.themeKey)!.dashboardArt} stats={stats} status={raffle.status}/>
+    <AdminDashboard slug={slug} title={raffle.title} art={getTheme(raffle.themeKey)!.dashboardArt} stats={stats} people={people} status={raffle.status}/>
     <InstallAdminApp slug={slug} babyName={raffle.babyName}/>
   </>;
 }

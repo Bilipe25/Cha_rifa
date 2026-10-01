@@ -14,7 +14,7 @@ async function freePort() {
   return port;
 }
 
-export async function runVisualCheck(base, slug, cookie, outputPrefix) {
+export async function runVisualCheck(base, slug, cookie, outputPrefix, options = {}) {
   const profile = await mkdtemp(join(tmpdir(), 'charifa-visual-'));
   const port = await freePort();
   const browser = spawn('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', [
@@ -51,11 +51,27 @@ export async function runVisualCheck(base, slug, cookie, outputPrefix) {
       pending.set(id, { resolve, reject });
       ws.send(JSON.stringify({ id, method, params }));
     });
+    const evaluate = async expression => {
+      const output = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+      if (output.exceptionDetails) throw new Error(output.exceptionDetails.text);
+      return output.result.value;
+    };
+    const until = async (expression, message) => {
+      for (let attempt = 0; attempt < 35; attempt++) {
+        if (await evaluate(`Boolean(${expression})`)) return;
+        await delay(100);
+      }
+      assert.fail(message);
+    };
     await send('Page.enable');
     await send('Network.enable');
     const [name, value] = cookie.split('=');
     await send('Network.setCookie', { name, value, url: base });
-    const cases = [
+    await send('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem(${JSON.stringify(`charifa_install_dismissed_${slug}`)}, String(Date.now() + 86400000)); } catch {}` });
+    const cases = options.drawn ? [
+      { path: `/admin/${slug}`, width: 320, height: 700, selector: '.dashboard-stage', min: 44 },
+      { path: `/admin/${slug}/participantes`, width: 480, height: 800, selector: '.participants-scroll', min: 44 },
+    ] : [
       { path: `/admin/${slug}`, width: 320, height: 700, selector: '.dashboard-stage', min: 44 },
       { path: `/admin/${slug}`, width: 480, height: 853, selector: '.dashboard-stage', min: 44 },
       { path: `/admin/${slug}`, width: 844, height: 390, selector: '.dashboard-stage', min: 44 },
@@ -112,7 +128,7 @@ export async function runVisualCheck(base, slug, cookie, outputPrefix) {
       const label = check.path === `/admin/${slug}` ? 'dashboard' : check.path.includes('configuracoes') ? 'reset-dialog' : check.path.includes('participantes') ? 'participants' : 'numbers';
       await writeFile(`${outputPrefix}-${label}-${check.width}x${check.height}.png`, Buffer.from(shot.data, 'base64'));
       console.log(`Visual ${label} ${check.width}x${check.height}: ${JSON.stringify(metrics)}`);
-      if (label === 'dashboard') {
+      if (label === 'dashboard' && !options.drawn) {
         const live = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
           const rows = document.querySelectorAll('.dashboard-preview-table tbody tr:not(.dashboard-preview-spacer)');
           return rows.length === 6 && document.querySelector('.dashboard-live-value--reserved').textContent !== '87/200'
@@ -132,21 +148,70 @@ export async function runVisualCheck(base, slug, cookie, outputPrefix) {
         const scrolledShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
         await writeFile(`${outputPrefix}-dashboard-scrolled-${check.width}x${check.height}.png`, Buffer.from(scrolledShot.data, 'base64'));
       }
-      if (label === 'participants') {
-        const opened = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
-          const button = document.querySelector('.participant-name-button');
-          button.click();
-          return true;
-        })()` });
-        assert.ok(opened.result.value);
-        await delay(100);
-        const detail = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
-          const button = document.querySelector('.participant-name-button');
-          const row = document.getElementById(button.getAttribute('aria-controls'));
-          return button.getAttribute('aria-expanded') === 'true' && !row.hidden;
-        })()` });
-        assert.ok(detail.result.value, 'detalhes da reserva abrem ao tocar no nome');
+      if (label === 'participants' || label === 'dashboard') {
+        await evaluate(`(() => {
+          const list = document.querySelector('.dashboard-preview, .participants-scroll');
+          const button = list.querySelector('tbody button');
+          window.sheetTrigger = button; window.sheetList = list; window.sheetListTop = list.scrollTop;
+          button.closest('tr').querySelector('td').click();
+        })()`);
+        await until("document.querySelector('.participant-sheet:modal .participant-sheet-body')?.getAttribute('aria-busy') === 'false'", 'sheet carrega ao tocar em qualquer coluna');
+        await until("document.querySelector('.participant-sheet').getAnimations().every(animation => animation.playState !== 'running')", 'animação de abertura concluiu');
+        const sheetFits = await evaluate(`(() => {
+          const rect = document.querySelector('.participant-sheet').getBoundingClientRect();
+          return rect.width <= innerWidth && rect.height <= innerHeight * .85 + 1 && rect.bottom <= innerHeight + 1;
+        })()`);
+        assert.ok(sheetFits, 'sheet cabe na tela e mantém espaço para o contexto');
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+        assert.ok(await evaluate("document.querySelector('.participant-sheet').contains(document.activeElement)"), 'foco permanece dentro do sheet');
+        if (options.drawn) assert.ok(await evaluate("!document.querySelector('.participant-sheet [data-sheet-action]') && !document.querySelector('.participant-sheet-late') && document.querySelector('.participant-sheet').textContent.includes('Sorteio concluído')"), 'após sorteio o sheet permite somente consulta');
+        const sheetShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+        await writeFile(`${outputPrefix}-${label}-sheet-${check.width}x${check.height}.png`, Buffer.from(sheetShot.data, 'base64'));
+        await evaluate("document.querySelector('.participant-sheet-history').open = true; document.querySelector('.participant-sheet-history').scrollIntoView({block:'nearest'})");
+        assert.ok(await evaluate("document.querySelector('.participant-sheet-history li') !== null"), 'histórico disponível no sheet');
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+        await until("!document.querySelector('.participant-sheet')", 'Esc fecha o sheet');
+        await until("document.activeElement === window.sheetTrigger && window.sheetList.scrollTop === window.sheetListTop", 'fechamento restaura o foco e conserva a rolagem');
       }
+    }
+    if (!options.drawn) {
+      await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 700, deviceScaleFactor: 1, mobile: true });
+      await send('Page.navigate', { url: `${base}/admin/${slug}` });
+      await until("document.querySelector('.dashboard-participant-button')", 'painel carregou para teste de ações');
+      await evaluate("[...document.querySelectorAll('.dashboard-participant-button')].find(button => button.textContent.includes('Bruno Santos')).click()");
+      await until("document.querySelector('[data-sheet-action=paid]')?.disabled === false", 'pagamento disponível');
+      await evaluate("document.querySelector('[data-sheet-action=paid]').click()");
+      await until("document.querySelector('[data-sheet-action=pending]')?.disabled === false", 'pagamento confirmado pelo sheet');
+      assert.ok(await evaluate("document.querySelector('.participant-sheet-history').textContent.includes('Pago')"), 'histórico recebe a confirmação');
+      await evaluate("document.querySelector('[data-sheet-action=release]').click()");
+      await until("document.querySelector('.participant-sheet-confirm')", 'confirmação aparece dentro do sheet');
+      assert.ok(await evaluate("document.querySelector('.participant-sheet-confirm').textContent.includes('não realiza reembolso')"), 'liberação paga exige confirmação explícita');
+      const confirmationShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+      await writeFile(`${outputPrefix}-sheet-paid-confirmation-320x700.png`, Buffer.from(confirmationShot.data, 'base64'));
+      await evaluate("document.querySelector('.participant-sheet-confirm .secondary-button').click()");
+      assert.ok(await evaluate("[...document.querySelectorAll('.dashboard-participant-row')].some(row => row.textContent.includes('Bruno Santos'))"), 'cancelar a confirmação preserva a reserva');
+      await evaluate("document.querySelector('[data-sheet-action=pending]').click()");
+      await until("document.querySelector('[data-sheet-action=confirm]')?.disabled === false", 'confirmação de pendência disponível');
+      await evaluate("document.querySelector('[data-sheet-action=confirm]').click()");
+      await until("document.querySelector('[data-sheet-action=paid]')?.disabled === false", 'reserva voltou a pendente');
+      await evaluate("document.querySelector('[data-sheet-action=release]').click()");
+      await until("document.querySelector('[data-sheet-action=confirm]')?.disabled === false", 'confirmação de liberação disponível');
+      await evaluate("document.querySelector('[data-sheet-action=confirm]').click()");
+      await until("document.querySelector('.participant-sheet .participant-payment-status--cancelled') && document.querySelector('.participant-sheet-body')?.getAttribute('aria-busy') === 'false' && ![...document.querySelectorAll('.dashboard-participant-row')].some(row => row.textContent.includes('Bruno Santos'))", 'liberação mantém sheet aberto e atualiza a tabela');
+      assert.ok(await evaluate("document.querySelector('.participant-sheet-history').textContent.includes('Liberado')"), 'histórico recebe a liberação');
+      assert.ok(await evaluate(`fetch(${JSON.stringify(`${base}/api/${slug}/numbers`)}).then(response => response.json()).then(data => !data.occupied.includes(29))`), 'liberação torna o número disponível');
+      await evaluate("document.querySelector('.participant-sheet-close').click()");
+      await until("!document.querySelector('.participant-sheet')", 'botão fecha sheet');
+      await until("document.activeElement === document.querySelector('.dashboard-preview')", 'foco retorna à tabela quando a linha foi removida');
+      await evaluate("document.querySelector('.dashboard-participant-button').click()");
+      await until("document.querySelector('.participant-sheet:modal')", 'sheet aberto para gesto');
+      const point = await evaluate("(() => { const r=document.querySelector('.participant-sheet-handle').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()");
+      await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+      await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: point.x, y: point.y + 90 }] });
+      await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await until("!document.querySelector('.participant-sheet')", 'deslizar a alça fecha o sheet');
     }
   } finally {
     ws?.close();

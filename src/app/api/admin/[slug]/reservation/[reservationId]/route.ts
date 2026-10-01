@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { isAdmin } from '@/lib/auth';
-import { getRaffle, setReservationStatus } from '@/lib/raffle';
+import { getRaffle, getAdminParticipant, setReservationStatus } from '@/lib/raffle';
+
+export async function GET(_request: Request, { params }: { params: Promise<{ slug: string; reservationId: string }> }) {
+  const { slug, reservationId } = await params;
+  if (!await isAdmin(slug)) return NextResponse.json({ error: 'Entre novamente para continuar.' }, { status: 401 });
+  const raffle = await getRaffle(slug);
+  if (!raffle) return NextResponse.json({ error: 'Rifa não encontrada.' }, { status: 404 });
+  const person = await getAdminParticipant(raffle.id, reservationId);
+  if (!person) return NextResponse.json({ error: 'Esta reserva não está mais disponível.' }, { status: 404 });
+  return NextResponse.json({ person, drawn: raffle.status === 'drawn' }, { headers: { 'Cache-Control': 'no-store' } });
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ slug: string; reservationId: string }> }) {
   const { slug, reservationId } = await params;

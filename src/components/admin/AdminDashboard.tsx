@@ -6,6 +6,8 @@ import { formatMoney, formatNumber } from '@/lib/currency';
 import { ShareRaffleButton } from './ShareRaffleButton';
 import { LogoutButton } from './LogoutButton';
 import { Icon } from '@/components/ui/Icons';
+import type { AdminParticipant } from '@/lib/admin-participant';
+import { DashboardParticipants } from './DashboardParticipants';
 
 const font = localFont({ src: '../../../public/fonts/dosis-variable.ttf', weight: '200 800', display: 'swap' });
 type Participant = { id: string; participantName: string; phone: string; phoneNormalized: string; numbers: number[]; status: string };
@@ -14,19 +16,12 @@ type Stats = { reserved: number; totalNumbers: number; confirmed: number; collec
 const region = (x: number, y: number, width: number, height: number): CSSProperties => ({
   left: `${x / 941 * 100}%`, top: `${y / 1672 * 100}%`, width: `${width / 941 * 100}%`, height: `${height / 1672 * 100}%`,
 });
-function StatusIcon({ art, paid }: { art: string; paid: boolean }) {
-  const y = paid ? 877 : 953;
-  return <span className="dashboard-status-art" aria-hidden="true"><Image src={art} width={941} height={1672} quality={95} alt="" sizes="(max-width: 480px) 100vw, 480px"
-    style={{ position: 'absolute', maxWidth: 'none', width: `${941 / 36 * 100}%`, height: 'auto', left: `${-752 / 36 * 100}%`, top: `${-y / 36 * 100}%` }}/></span>;
-}
-
-export function AdminDashboard({ slug, title, art, stats, status }: { slug: string; title: string; art: string; stats: Stats; status: string }) {
+export function AdminDashboard({ slug, title, art, stats, people, status }: { slug: string; title: string; art: string; stats: Stats; people: AdminParticipant[]; status: string }) {
   const active = stats.people.filter(person => person.status !== 'cancelled');
   const participants = new Set(active.map(person => person.phoneNormalized)).size;
   const lastNumber = active[0]?.numbers.at(-1);
   const reserved = `${stats.reserved}/${stats.totalNumbers}`;
   const collected = formatMoney(stats.collectedCents).replace(/^R\$\s*/, '');
-  const labels: Record<string, string> = { pending: 'Pendente', payment_reported: 'A conferir', paid: 'Pago' };
   return <div className={`theme-frame dashboard-frame ${font.className}`}><main className="dashboard-scroll">
     <div className="dashboard-stage">
       <Image src={art} fill priority quality={95} alt="" sizes="(max-width: 480px) 100vw, 480px" className="dashboard-reference"/>
@@ -38,20 +33,7 @@ export function AdminDashboard({ slug, title, art, stats, status }: { slug: stri
       <section className="dashboard-participant-count" style={region(688, 710, 200, 51)} aria-label="Quantidade de participantes">{participants} {participants === 1 ? 'participante' : 'participantes'}</section>
       <section className="dashboard-preview" style={region(45, 790, 855, 375)} tabIndex={0} aria-label="Lista de participantes com rolagem">
         <h2 className="sr-only">Participantes</h2>
-        <table className="dashboard-preview-table"><caption className="sr-only">Todos os participantes com reservas ativas, da mais recente à mais antiga. Role para ver os demais. Use Ver participantes para conferir pagamentos.</caption>
-          <colgroup><col style={{ width: '26%' }}/><col style={{ width: '26%' }}/><col style={{ width: '28%' }}/><col style={{ width: '20%' }}/></colgroup>
-          <thead><tr><th scope="col">Nome</th><th scope="col">Telefone</th><th scope="col">Números escolhidos</th><th scope="col">Status</th></tr></thead>
-          <tbody>{active.map(person => <tr key={person.id}>
-            <th scope="row"><span className="dashboard-preview-name" title={person.participantName}>{person.participantName}</span></th>
-            <td className="dashboard-preview-phone">{person.phone}</td>
-            <td><div className="dashboard-preview-numbers" aria-label={`Números ${person.numbers.join(', ')}`}>
-              {person.numbers.slice(0, person.numbers.length > 3 ? 2 : 3).map(number => <b key={number}>{formatNumber(number)}</b>)}
-              {person.numbers.length > 3 && <b>+{person.numbers.length - 2}</b>}
-            </div></td>
-            <td><span className={`dashboard-preview-status dashboard-preview-status--${person.status}`}><StatusIcon art={art} paid={person.status === 'paid'}/><span>{labels[person.status] ?? person.status}</span></span></td>
-          </tr>)}{Array.from({ length: Math.max(0, 4 - active.length) }, (_, index) => <tr key={`empty-${index}`} aria-hidden="true" className="dashboard-preview-spacer"><td colSpan={4}/></tr>)}</tbody>
-        </table>
-        {!active.length && <p className="dashboard-preview-empty">Os participantes aparecerão aqui quando fizerem uma reserva.</p>}
+        <DashboardParticipants slug={slug} people={people} art={art} drawn={status === 'drawn'}/>
       </section>
       <div className={`dashboard-last-number${String(lastNumber ?? '').length > 2 ? ' dashboard-last-number--long' : ''}`} style={region(269, 1232, 105, 67)} aria-label="Último número reservado">{lastNumber === undefined ? '—' : formatNumber(lastNumber)}</div>
       <Link className="dashboard-art-action" style={region(119, 1332, 706, 128)} href={`/admin/${slug}/sorteio`} aria-label="Realizar sorteio"><span className="sr-only">Realizar sorteio</span></Link>

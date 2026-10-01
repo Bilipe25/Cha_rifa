@@ -13,7 +13,7 @@ export function TouchFeedback() {
       const target = event.target;
       if (!(target instanceof Element)) return;
 
-      const control = target.closest('button, a[href], [role="button"]');
+      const control = target.closest('button, a[href], [role="button"], [data-touch-feedback]');
       if (!control || control.matches(':disabled, [aria-disabled="true"]')) return;
 
       navigator.vibrate(12);

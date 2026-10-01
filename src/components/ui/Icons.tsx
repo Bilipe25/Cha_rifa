@@ -1,6 +1,7 @@
-export function Icon({ name, size = 22 }: { name: 'ticket' | 'arrow' | 'calendar' | 'gift' | 'copy' | 'check' | 'heart' | 'back' | 'lock' | 'share' | 'settings' | 'clock'; size?: number }) {
+export function Icon({ name, size = 22 }: { name: 'ticket' | 'arrow' | 'calendar' | 'gift' | 'copy' | 'check' | 'heart' | 'back' | 'lock' | 'share' | 'settings' | 'clock' | 'close'; size?: number }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true as const };
   const path = {
+    close: <path d="m6 6 12 12M18 6 6 18"/>,
     clock: <><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></>,
     ticket: <><path d="M3 7a2 2 0 0 0 2-2h14v4a2 2 0 0 0 0 4v4H5a2 2 0 0 0-2-2V7Z"/><path d="M13 5v2m0 3v4m0 3v2"/></>,
     arrow: <path d="m9 5 7 7-7 7"/>,

@@ -28,7 +28,11 @@ export function InstallAdminApp({ slug, babyName }: { slug: string; babyName: st
 
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (visible && dialog && !dialog.open) dialog.showModal();
+    if (visible && dialog && !dialog.open) {
+      // Installation can wait for another visit while the mother is handling a reservation.
+      if (document.querySelector('dialog:modal')) { setVisible(false); return; }
+      dialog.showModal();
+    }
   }, [visible]);
 
   function dismiss() {

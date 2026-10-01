@@ -119,6 +119,14 @@ async function main() {
   assert.equal(login.response.status, 200);
   const cookie = login.response.headers.get('set-cookie')?.split(';')[0];
   assert.ok(cookie);
+  const detailPath = `/api/admin/${slug}/reservation/${afterConflicts.body.reservationId}`;
+  assert.equal((await request(base, detailPath)).response.status, 401, 'detalhes administrativos exigem sessão');
+  const detail = await request(base, detailPath, 'GET', undefined, cookie);
+  assert.equal(detail.response.status, 200);
+  assert.equal(detail.response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(detail.body.person.numbers, [50]);
+  assert.ok(detail.body.person.events.length > 0, 'detalhes incluem histórico');
+  assert.equal(detail.body.person.pixPayload, undefined, 'resposta de detalhes contém apenas os campos necessários');
   if (process.env.VISUAL_CHECK_OUTPUT) {
     const demoReservations = [];
     for (const [name, numbers, phone, status] of [
@@ -134,7 +142,10 @@ async function main() {
       if (status === 'paid') assert.equal((await request(base, `/api/admin/${slug}/reservation/${item.body.reservationId}`, 'PATCH', { status }, cookie)).response.status, 200);
     }
     await runVisualCheck(base, slug, cookie, process.env.VISUAL_CHECK_OUTPUT);
-    for (const id of demoReservations) assert.equal((await request(base, `/api/admin/${slug}/reservation/${id}`, 'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
+    for (const id of demoReservations) {
+      const current = await request(base, `/api/admin/${slug}/reservation/${id}`, 'GET', undefined, cookie);
+      if (current.body.person.status !== 'cancelled') assert.equal((await request(base, `/api/admin/${slug}/reservation/${id}`, 'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
+    }
   }
   assert.match(cookie, /^charifa_session_maria-antonella=/);
   assert.equal((await request(base, `/api/admin/${slug}/reservation/${afterConflicts.body.reservationId}`,
@@ -163,6 +174,8 @@ async function main() {
   assert.equal(helenaLogin.response.status, 200);
   const helenaCookie = helenaLogin.response.headers.get('set-cookie')?.split(';')[0];
   assert.match(helenaCookie, /^charifa_session_helena=/);
+  assert.equal((await request(base, detailPath, 'GET', undefined, helenaCookie)).response.status, 401, 'outra sessão não lê detalhes desta rifa');
+  assert.equal((await request(base, `/api/admin/helena/reservation/${afterConflicts.body.reservationId}`, 'GET', undefined, helenaCookie)).response.status, 404, 'detalhes não atravessam rifas');
   const bothCookies = `${cookie}; ${helenaCookie}`;
   const mariaAdmin = await request(base, `/admin/${slug}`, 'GET', undefined, bothCookies);
   assert.equal(mariaAdmin.response.status, 200);
@@ -294,6 +307,8 @@ async function main() {
   const resolved = await request(base, `/api/admin/${slug}/late-payment/${first.body.reservationId}`, 'POST', { note: 'Reembolso combinado com a pessoa' }, cookie);
   assert.equal(resolved.response.status, 200);
   assert.equal((await request(base, `/api/admin/${slug}/draw`, 'POST', undefined, cookie)).response.status, 200);
+  assert.equal((await request(base, `/api/admin/${slug}/reservation/${second.body.reservationId}`, 'GET', undefined, cookie)).body.drawn, true, 'sheet recebe o bloqueio após sorteio');
+  if (process.env.VISUAL_CHECK_OUTPUT) await runVisualCheck(base, slug, cookie, `${process.env.VISUAL_CHECK_OUTPUT}-drawn`, { drawn: true });
   const publicResult = await request(base, `/${slug}/resultado`);
   assert.equal(publicResult.response.status, 200);
   assert.equal((await publicResult.response.text()).includes('79999990002'), false, 'resultado público não deve conter telefone');

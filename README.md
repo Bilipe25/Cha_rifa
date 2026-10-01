@@ -65,6 +65,8 @@ Na área da mãe, **Configurações da rifa** permite alterar data do sorteio, d
 
 O botão **Resetar rifa**, nas configurações, exige digitar `RESETAR`. Ele apaga participantes, reservas (inclusive pagas), histórico e resultados do sorteio, libera os números da faixa atual e reabre as reservas. Preço, prêmios, data, quantidade, tema, Pix e senha são mantidos. A exclusão não pode ser desfeita e não realiza reembolsos; guarde os registros de que precisar antes de confirmar. Links de reservas antigas deixam de existir. Nenhuma outra rifa é alterada.
 
+Ao tocar na linha de uma reserva no painel ou na página de participantes, um sheet mostra dados atuais, números, valor, prazo e histórico. Permite confirmar pagamento, voltar para pendente, liberar todos os números da reserva e registrar a solução de um pagamento tardio. Liberação e volta para pendente exigem confirmação no próprio sheet. A lista e os indicadores são atualizados após salvar; fechar conserva a posição da lista. Após o sorteio, o sheet é apenas para consulta. Os detalhes são consultados por uma API autenticada, limitada à rifa da sessão, sem cache.
+
 ## Nova rifa ou tema
 
 O tema também define `dashboardArt`: a arte aprovada para a inicial administrativa. A atual conserva ícones e lettering originais e cobre todos os valores de exemplo com dados reais. Os espaços dinâmicos seguem as coordenadas da referência 941×1672 em `AdminDashboard.tsx`; uma nova arte deve manter essas áreas ou ajustar as coordenadas. Os textos variáveis usam Dosis, distribuída sob a licença em `public/fonts/Dosis-OFL.txt` ([origem da fonte](https://github.com/google/fonts/tree/main/ofl/dosis)).
