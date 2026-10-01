@@ -56,11 +56,16 @@ export async function runVisualCheck(base, slug, cookie, outputPrefix) {
     const [name, value] = cookie.split('=');
     await send('Network.setCookie', { name, value, url: base });
     const cases = [
+      { path: `/admin/${slug}`, width: 320, height: 700, selector: '.dashboard-stage', min: 44 },
+      { path: `/admin/${slug}`, width: 480, height: 853, selector: '.dashboard-stage', min: 44 },
+      { path: `/admin/${slug}`, width: 844, height: 390, selector: '.dashboard-stage', min: 44 },
       { path: `/${slug}/numeros`, width: 844, height: 390, selector: '.number-scroll', min: 150 },
       { path: `/${slug}/numeros`, width: 320, height: 700, selector: '.number-scroll', min: 150 },
       { path: `/admin/${slug}/participantes`, width: 844, height: 390, selector: '.participants-scroll', min: 44 },
       { path: `/admin/${slug}/participantes`, width: 320, height: 700, selector: '.participants-scroll', min: 44 },
       { path: `/admin/${slug}/participantes`, width: 480, height: 800, selector: '.participants-scroll', min: 44 },
+      { path: `/admin/${slug}/configuracoes`, width: 320, height: 700, selector: '.settings-panel', min: 44 },
+      { path: `/admin/${slug}/configuracoes`, width: 480, height: 800, selector: '.settings-panel', min: 44 },
     ];
     for (const check of cases) {
       await send('Emulation.setDeviceMetricsOverride', {
@@ -71,7 +76,7 @@ export async function runVisualCheck(base, slug, cookie, outputPrefix) {
       const { result } = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
         const area = document.querySelector(${JSON.stringify(check.selector)});
         const frame = document.querySelector('.theme-frame');
-        const content = document.querySelector('.frame-content');
+        const content = document.querySelector('.frame-content') || document.querySelector('.dashboard-scroll');
         return { areaHeight: area?.getBoundingClientRect().height ?? 0,
           frameHeight: frame?.getBoundingClientRect().height ?? 0,
           viewportHeight: innerHeight, documentWidth: document.documentElement.scrollWidth,
@@ -83,10 +88,50 @@ export async function runVisualCheck(base, slug, cookie, outputPrefix) {
       assert.ok(metrics.documentWidth <= metrics.viewportWidth, 'sem rolagem horizontal do documento');
       assert.equal(metrics.frameHeight, metrics.viewportHeight, 'moldura preenche a altura');
       if (check.height <= 600) assert.ok(metrics.contentScroll > metrics.contentHeight, 'painel curto permite rolagem interna');
+      if (check.path.includes('configuracoes')) {
+        await send('Runtime.evaluate', { expression: "document.querySelector('.raffle-reset-button').click()" });
+        await delay(100);
+        const resetDialog = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
+          const dialog = document.querySelector('.raffle-reset-dialog');
+          const rect = dialog.getBoundingClientRect();
+          return dialog.open && dialog.querySelector('.primary-button').disabled && rect.width <= innerWidth && rect.height <= innerHeight;
+        })()` });
+        assert.ok(resetDialog.result.value, 'diálogo de reset cabe na tela e exige confirmação');
+        await send('Runtime.evaluate', { expression: "document.querySelector('.raffle-reset-dialog input').focus()" });
+        await send('Input.insertText', { text: 'RESETAR' });
+        const enabled = await send('Runtime.evaluate', { returnByValue: true, expression: "!document.querySelector('.raffle-reset-dialog .primary-button').disabled" });
+        assert.ok(enabled.result.value, 'digitar RESETAR libera a confirmação');
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+        await delay(100);
+        const closed = await send('Runtime.evaluate', { returnByValue: true, expression: "!document.querySelector('.raffle-reset-dialog').open && document.activeElement === document.querySelector('.raffle-reset-button')" });
+        assert.ok(closed.result.value, 'Esc cancela e devolve o foco ao botão de reset');
+        await send('Runtime.evaluate', { expression: "document.querySelector('.raffle-reset-button').click()" });
+      }
       const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-      const label = check.path.includes('participantes') ? 'participants' : 'numbers';
+      const label = check.path === `/admin/${slug}` ? 'dashboard' : check.path.includes('configuracoes') ? 'reset-dialog' : check.path.includes('participantes') ? 'participants' : 'numbers';
       await writeFile(`${outputPrefix}-${label}-${check.width}x${check.height}.png`, Buffer.from(shot.data, 'base64'));
       console.log(`Visual ${label} ${check.width}x${check.height}: ${JSON.stringify(metrics)}`);
+      if (label === 'dashboard') {
+        const live = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
+          const rows = document.querySelectorAll('.dashboard-preview-table tbody tr:not(.dashboard-preview-spacer)');
+          return rows.length === 6 && document.querySelector('.dashboard-live-value--reserved').textContent !== '87/200'
+            && document.querySelector('.dashboard-art-action').getAttribute('href').endsWith('/sorteio');
+        })()` });
+        assert.ok(live.result.value, 'painel mostra todas as seis reservas de teste e navegação funcional');
+        const scrolled = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
+          const list = document.querySelector('.dashboard-preview');
+          const page = document.querySelector('.dashboard-scroll');
+          const pageTop = page.scrollTop;
+          list.scrollTop = list.scrollHeight;
+          const headerTop = list.querySelector('thead th').getBoundingClientRect().top;
+          return list.scrollTop > 0 && page.scrollTop === pageTop
+            && Math.abs(headerTop - list.getBoundingClientRect().top) < 2;
+        })()` });
+        assert.ok(scrolled.result.value, 'a tabela rola independentemente do painel e mantém o cabeçalho visível');
+        const scrolledShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+        await writeFile(`${outputPrefix}-dashboard-scrolled-${check.width}x${check.height}.png`, Buffer.from(scrolledShot.data, 'base64'));
+      }
       if (label === 'participants') {
         const opened = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
           const button = document.querySelector('.participant-name-button');

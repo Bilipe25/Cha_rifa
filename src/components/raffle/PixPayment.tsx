@@ -17,6 +17,7 @@ export function PixPayment({ slug, reservationId, numbers, totalCents, payload, 
     try {
       const response = await fetch(`/api/${slug}/payment/${reservationId}`, { cache: 'no-store' });
       if (response.ok) setCurrent(await response.json());
+      else if (response.status === 404) setCurrent({ status: 'cancelled', expiresAt: null, cancelReason: 'reset', latePaymentReported: false });
     } catch { /* A próxima atualização tentará novamente. */ }
   }, [slug, reservationId]);
   useEffect(() => {

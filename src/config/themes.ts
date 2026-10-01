@@ -8,6 +8,7 @@ export type FrameLayout = {
 };
 
 export type RaffleTheme = {
+  dashboardArt: string;
   frames: Record<FrameVariant, string>;
   shareImage: string;
   icons: { icon192: string; icon512: string; appleTouchIcon: string };
@@ -19,6 +20,7 @@ export type RaffleTheme = {
 
 export const themes: Record<string, RaffleTheme> = {
   'maria-antonella': {
+    dashboardArt: '/themes/maria-antonella/admin-dashboard.png',
     frames: {
       home: '/themes/maria-antonella/home-frame.webp',
       guest: '/themes/maria-antonella/guest-frame.webp',

@@ -14,3 +14,4 @@ export * from './lifecycle';
 
 export * from './draw';
 export * from './settings';
+export * from './reset';

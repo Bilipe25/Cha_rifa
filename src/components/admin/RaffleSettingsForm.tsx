@@ -7,6 +7,7 @@ import { Icon } from '@/components/ui/Icons';
 import { formatMoney } from '@/lib/currency';
 import { normalizePixMerchantText } from '@/lib/pix-format';
 import { normalizePixKey } from '@/lib/pix-key';
+import { ResetRaffleButton } from '@/components/admin/ResetRaffleButton';
 
 type Settings = {
   drawDate: string;
@@ -158,6 +159,7 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
       {success && <p className="inline-notice settings-success" role="status">{success}</p>}
       {!drawn && <button ref={saveButton} type="submit" className="primary-button" disabled={busy}><span>{busy ? 'SALVANDO...' : 'SALVAR ALTERAÇÕES'}</span></button>}
     </form>
+    <ResetRaffleButton slug={slug} disabled={busy || draft !== null}/>
     {draft && <div className="modal-backdrop" role="presentation"><div className="confirm-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="settings-confirm-title">
       <h3 id="settings-confirm-title">Confirmar alterações?</h3>
       <p>Já existem participantes nessa rifa. As reservas atuais não serão alteradas. Deseja continuar?</p>

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes, randomUUID, scryptSync } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -119,7 +119,23 @@ async function main() {
   assert.equal(login.response.status, 200);
   const cookie = login.response.headers.get('set-cookie')?.split(';')[0];
   assert.ok(cookie);
-  if (process.env.VISUAL_CHECK_OUTPUT) await runVisualCheck(base, slug, cookie, process.env.VISUAL_CHECK_OUTPUT);
+  if (process.env.VISUAL_CHECK_OUTPUT) {
+    const demoReservations = [];
+    for (const [name, numbers, phone, status] of [
+      ['Ana Silva', [7, 12], '79999990301', 'paid'],
+      ['Juliana Souza', [18], '79999990302', 'pending'],
+      ['Maria Clara', [25, 26, 27], '79999990303', 'paid'],
+      ['Fernanda Lima', [28], '79999990304', 'pending'],
+      ['Bruno Santos', [29], '79999990305', 'pending'],
+    ]) {
+      const item = await request(base, `/api/${slug}/reserve`, 'POST', { name, numbers, phone }, undefined, { 'x-vercel-forwarded-for': '198.51.100.80' });
+      assert.equal(item.response.status, 200);
+      demoReservations.push(item.body.reservationId);
+      if (status === 'paid') assert.equal((await request(base, `/api/admin/${slug}/reservation/${item.body.reservationId}`, 'PATCH', { status }, cookie)).response.status, 200);
+    }
+    await runVisualCheck(base, slug, cookie, process.env.VISUAL_CHECK_OUTPUT);
+    for (const id of demoReservations) assert.equal((await request(base, `/api/admin/${slug}/reservation/${id}`, 'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
+  }
   assert.match(cookie, /^charifa_session_maria-antonella=/);
   assert.equal((await request(base, `/api/admin/${slug}/reservation/${afterConflicts.body.reservationId}`,
     'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
@@ -294,9 +310,42 @@ async function main() {
   assert.equal((await reserve(5, '79999990005')).response.status, 409, 'não aceita reservas após sorteio');
   assert.equal((await request(base, `/api/admin/${slug}/reservation/${second.body.reservationId}`, 'PATCH', { status: 'pending' }, cookie)).response.status, 409, 'não altera elegibilidade após sorteio');
   assert.equal((await request(base, `/api/admin/${slug}/draw`, 'POST', undefined, cookie)).response.status, 409, 'não repete sorteio');
+  const resetPath = `/api/admin/${slug}/reset`;
+  const confirmation = { confirmation: 'RESETAR' };
+  assert.equal((await request(base, resetPath, 'POST', confirmation)).response.status, 401, 'reset exige autenticação');
+  assert.equal((await request(base, resetPath, 'POST', confirmation, helenaCookie)).response.status, 401, 'sessão de outra rifa não pode resetar');
+  assert.equal((await request(base, resetPath, 'POST', {}, cookie)).response.status, 400, 'reset exige confirmação explícita');
+  assert.equal((await request(base, resetPath, 'POST', confirmation, cookie, { origin: 'https://outra-origem.example' })).response.status, 403);
+  assert.equal(Number((await client.execute({ sql: 'SELECT COUNT(*) AS total FROM draws WHERE raffle_id = ?', args: [raffleId] })).rows[0].total), 2,
+    'requisições recusadas preservam o sorteio');
+  const beforeReset = (await client.execute({ sql: 'SELECT * FROM raffles WHERE id = ?', args: [raffleId] })).rows[0];
+  const now = new Date().toISOString();
+  await client.execute({ sql: `INSERT INTO raffle_numbers (id, raffle_id, number, status, created_at, updated_at) VALUES (?, ?, 251, 'retired', ?, ?)`, args: [randomUUID(), raffleId, now, now] });
+  await client.execute({ sql: `INSERT INTO raffle_numbers (id, raffle_id, number, status, created_at, updated_at) VALUES (?, ?, 1, 'available', ?, ?)`, args: [randomUUID(), helenaId, now, now] });
+  const otherReservation = await request(base, '/api/helena/reserve', 'POST', { numbers: [1], name: 'Outra Pessoa', phone: '79999990200' });
+  assert.equal(otherReservation.response.status, 200);
+  const otherRaffleBefore = (await client.execute({ sql: 'SELECT * FROM raffles WHERE id = ?', args: [helenaId] })).rows[0];
+  assert.equal((await request(base, resetPath, 'POST', confirmation, cookie, { origin: base })).response.status, 200, 'pode resetar rifa sorteada');
+  const afterReset = (await client.execute({ sql: 'SELECT * FROM raffles WHERE id = ?', args: [raffleId] })).rows[0];
+  for (const field of Object.keys(beforeReset)) {
+    if (!['status', 'closed_at', 'drawn_at'].includes(field)) assert.equal(afterReset[field], beforeReset[field], `reset preserva ${field}`);
+  }
+  assert.equal(afterReset.status, 'active');
+  assert.equal(afterReset.closed_at, null);
+  assert.equal(afterReset.drawn_at, null);
+  for (const table of ['reservations', 'reservation_events', 'draws']) {
+    assert.equal(Number((await client.execute({ sql: `SELECT COUNT(*) AS total FROM ${table} WHERE raffle_id = ?`, args: [raffleId] })).rows[0].total), 0, `${table} foi limpo`);
+  }
+  assert.equal(Number((await client.execute({ sql: 'SELECT COUNT(*) AS total FROM reservation_numbers rn JOIN raffle_numbers n ON rn.raffle_number_id = n.id WHERE n.raffle_id = ?', args: [raffleId] })).rows[0].total), 0);
+  assert.equal(Number((await client.execute({ sql: "SELECT COUNT(*) AS total FROM raffle_numbers WHERE raffle_id = ? AND number <= 250 AND status = 'available' AND reservation_id IS NULL", args: [raffleId] })).rows[0].total), 250);
+  assert.equal((await client.execute({ sql: 'SELECT status FROM raffle_numbers WHERE raffle_id = ? AND number = 251', args: [raffleId] })).rows[0].status, 'retired');
+  assert.deepEqual((await client.execute({ sql: 'SELECT * FROM raffles WHERE id = ?', args: [helenaId] })).rows[0], otherRaffleBefore, 'outra rifa permanece intacta');
+  assert.equal((await request(base, `/api/helena/payment/${otherReservation.body.reservationId}`)).body.status, 'pending');
+  assert.equal((await request(base, `/api/${slug}/payment/${second.body.reservationId}`)).response.status, 404, 'links antigos deixam de existir');
+  assert.equal((await reserve(2, '79999990002')).response.status, 200, 'número liberado pode ser reservado novamente');
   await client.execute({ sql: 'UPDATE raffles SET session_version = session_version + 1 WHERE id = ?', args: [raffleId] });
   assert.equal((await request(base, `/api/admin/${slug}/lifecycle`, 'POST', { action: 'reopen' }, cookie)).response.status, 401, 'troca de senha deve invalidar sessão');
-  console.log('Integração passou: concorrência, consulta, expiração, Pix tardio, fechamento, sorteio e sessão.');
+  console.log('Integração passou: concorrência, consulta, expiração, Pix tardio, fechamento, sorteio, reset e sessão.');
 }
 
 try { await main(); }

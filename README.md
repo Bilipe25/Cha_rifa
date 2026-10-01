@@ -63,7 +63,11 @@ O painel possui um manifest por rifa em `/admin/<slug>/manifest.webmanifest`. O 
 
 Na área da mãe, **Configurações da rifa** permite alterar data do sorteio, dois prêmios, preço por número, quantidade entre 2 e 1000, chave Pix, nome e cidade da recebedora. Valores são guardados em centavos. O preço e os dados Pix novos afetam apenas reservas futuras; se o preço mudou enquanto a participante preenchia a reserva, a tela informa o valor atualizado antes de concluir. Para diminuir a quantidade, todos os números fora da nova faixa precisam estar livres; os registros antigos ficam inativos para preservar o histórico e voltam a ficar disponíveis se a faixa for ampliada. Após o sorteio, as configurações não podem mais ser alteradas.
 
+O botão **Resetar rifa**, nas configurações, exige digitar `RESETAR`. Ele apaga participantes, reservas (inclusive pagas), histórico e resultados do sorteio, libera os números da faixa atual e reabre as reservas. Preço, prêmios, data, quantidade, tema, Pix e senha são mantidos. A exclusão não pode ser desfeita e não realiza reembolsos; guarde os registros de que precisar antes de confirmar. Links de reservas antigas deixam de existir. Nenhuma outra rifa é alterada.
+
 ## Nova rifa ou tema
+
+O tema também define `dashboardArt`: a arte aprovada para a inicial administrativa. A atual conserva ícones e lettering originais e cobre todos os valores de exemplo com dados reais. Os espaços dinâmicos seguem as coordenadas da referência 941×1672 em `AdminDashboard.tsx`; uma nova arte deve manter essas áreas ou ajustar as coordenadas. Os textos variáveis usam Dosis, distribuída sob a licença em `public/fonts/Dosis-OFL.txt` ([origem da fonte](https://github.com/google/fonts/tree/main/ofl/dosis)).
 
 Coloque as três molduras, uma imagem de compartilhamento de 1200×630 e ícones de 192×192, 512×512 e 180×180 em `public/themes/<tema>/`. Registre os caminhos, cores e posições de conteúdo em `src/config/themes.ts`. Cada tema define `layout.home`, `layout.guest` e `layout.admin` por `top`, `left`, `right` e `bottom`; assim, outra composição de moldura não exige editar o CSS global. A imagem de compartilhamento fica em `shareImage` e os ícones em `icons`.
 
