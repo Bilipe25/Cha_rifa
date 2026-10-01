@@ -124,6 +124,54 @@ button:disabled { cursor:not-allowed; }
 .admin-login>.panel-heading { margin-bottom:8%; }
 .admin-login>.primary-button { margin-top:5%; }
 .participants-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#e2a4bb transparent; }
+.participants-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 12px; }
+.participants-heading h2 { display:flex; align-items:center; gap:5px; margin:0; color:var(--brown); font-size:24px; line-height:1.15; }
+.participants-heading h2 svg { color:#cf4a77; flex:none; }
+.participants-heading>span { flex:none; padding:6px 9px; border:1px solid var(--line); border-radius:999px; background:#ffe7ef; color:#a52b58; font-size:12px; font-weight:800; }
+.participants-hint { margin:0 0 8px; color:#704b5a; font-size:12px; line-height:1.35; }
+.participants-table { width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0 6px; text-align:left; font-size:12px; }
+.participant-name-column { width:27%; }
+.participant-phone-column { width:27%; }
+.participant-numbers-column { width:25%; }
+.participant-status-column { width:21%; }
+.participants-table thead { position:sticky; top:0; z-index:2; }
+.participants-table thead th { padding:10px 6px; background:#ffe4ed; color:#a32755; font-weight:800; line-height:1.25; border-block:1px solid #f8cdd9; }
+.participants-table thead th:first-child { border-radius:12px 0 0 12px; border-left:1px solid #f8cdd9; }
+.participants-table thead th:last-child { border-radius:0 12px 12px 0; border-right:1px solid #f8cdd9; }
+.participant-row>th,.participant-row>td { padding:6px; vertical-align:middle; border-block:1px solid #f8d5df; background:#fff9fb; overflow-wrap:anywhere; }
+.participant-row>th { border-left:1px solid #f8d5df; border-radius:12px 0 0 12px; }
+.participant-row>td:last-child { border-right:1px solid #f8d5df; border-radius:0 12px 12px 0; }
+.participant-name-button { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:4px; width:100%; min-height:44px; padding:4px 0; border:0; background:transparent; color:var(--brown); text-align:left; }
+.participant-name-button strong { font-size:14px; line-height:1.25; }
+.participant-expand-label { display:flex; align-items:center; gap:3px; color:#9b2c57; font-size:11px; font-weight:700; }
+.participant-row--expanded .participant-expand-label svg { transform:rotate(90deg); }
+.participant-phone-cell { font-variant-numeric:tabular-nums; }
+.participant-number-chips { display:flex; flex-wrap:wrap; gap:4px; }
+.participant-number-chips b { display:grid; place-items:center; min-width:30px; min-height:32px; padding:3px; border-radius:9px; background:#ffd9e6; color:#ae2050; font-size:15px; font-weight:900; font-variant-numeric:tabular-nums; }
+.participant-payment-status { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:3px; padding:6px 3px; border-radius:10px; background:#ffe0eb; color:#a62150; font-size:12px; line-height:1.2; font-weight:900; }
+.participant-payment-status>span { white-space:nowrap; }
+.participant-payment-status svg { flex:none; }
+.participant-payment-status--paid { background:#e8f2df; color:#355d22; }
+.participant-payment-status--payment_reported { background:#f0e4f7; color:#71428a; }
+.participant-payment-status--cancelled { background:#eee7ec; color:#66545e; }
+.participant-details-row>td { padding:0; }
+.participant-details { padding:12px; border:1px solid #f5ccd9; border-radius:12px; background:#fff2f7; }
+.participant-details p { margin:8px 0; font-size:12px; line-height:1.4; }
+.participant-reservation-meta { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px; font-size:12px; }
+.participant-reservation-meta b { color:#a52b58; }
+.participant-mobile-label,.participant-mobile-phone { display:none; }
+@media (max-width:390px) {
+  .participants-heading h2 { font-size:21px; }
+  .participants-heading>span { padding:6px; font-size:11px; }
+  .participant-phone-cell,.participant-phone-column,.participant-wide-label { display:none; }
+  .participant-name-column { width:42%; }
+  .participant-phone-column { width:0; }
+  .participant-numbers-column { width:31%; }
+  .participant-status-column { width:27%; }
+  .participant-mobile-label,.participant-mobile-phone { display:block; }
+  .participant-mobile-phone { font-size:11px; font-weight:600; line-height:1.3; }
+  .participant-payment-status { font-size:11px; }
+}
 .participant-card { padding:4%; margin-bottom:2.5%; border-radius:17px; background:#fff0f5; }
 .participant-header { display:flex; align-items:start; justify-content:space-between; gap:5px; }
 .participant-header>strong { font-size:16px; line-height:1.2; }

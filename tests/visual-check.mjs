@@ -59,6 +59,8 @@ export async function runVisualCheck(base, slug, cookie, outputPrefix) {
       { path: `/${slug}/numeros`, width: 844, height: 390, selector: '.number-scroll', min: 150 },
       { path: `/${slug}/numeros`, width: 320, height: 700, selector: '.number-scroll', min: 150 },
       { path: `/admin/${slug}/participantes`, width: 844, height: 390, selector: '.participants-scroll', min: 44 },
+      { path: `/admin/${slug}/participantes`, width: 320, height: 700, selector: '.participants-scroll', min: 44 },
+      { path: `/admin/${slug}/participantes`, width: 480, height: 800, selector: '.participants-scroll', min: 44 },
     ];
     for (const check of cases) {
       await send('Emulation.setDeviceMetricsOverride', {
@@ -85,6 +87,21 @@ export async function runVisualCheck(base, slug, cookie, outputPrefix) {
       const label = check.path.includes('participantes') ? 'participants' : 'numbers';
       await writeFile(`${outputPrefix}-${label}-${check.width}x${check.height}.png`, Buffer.from(shot.data, 'base64'));
       console.log(`Visual ${label} ${check.width}x${check.height}: ${JSON.stringify(metrics)}`);
+      if (label === 'participants') {
+        const opened = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
+          const button = document.querySelector('.participant-name-button');
+          button.click();
+          return true;
+        })()` });
+        assert.ok(opened.result.value);
+        await delay(100);
+        const detail = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
+          const button = document.querySelector('.participant-name-button');
+          const row = document.getElementById(button.getAttribute('aria-controls'));
+          return button.getAttribute('aria-expanded') === 'true' && !row.hidden;
+        })()` });
+        assert.ok(detail.result.value, 'detalhes da reserva abrem ao tocar no nome');
+      }
     }
   } finally {
     ws?.close();
