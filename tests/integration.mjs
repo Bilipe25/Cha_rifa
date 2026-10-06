@@ -85,6 +85,8 @@ async function main() {
   const firstStatus = await request(base, `/api/${slug}/payment/${first.body.reservationId}`);
   assert.equal(firstStatus.body.status, 'pending', 'consulta pública da própria reserva informa estado atual');
   assert.equal(firstStatus.response.headers.get('cache-control'), 'no-store');
+  const defaultDeadline = (await client.execute({ sql: 'SELECT expires_at, created_at FROM reservations WHERE id = ?', args: [first.body.reservationId] })).rows[0];
+  assert.ok(Math.abs(Date.parse(defaultDeadline.expires_at) - Date.parse(defaultDeadline.created_at) - 62 * 3600000) < 60000, 'novas reservas usam padrão de 62 horas');
   assert.equal((await request(base, `/api/${slug}/reserve`, 'POST', { numbers: Array.from({ length: 11 }, (_, i) => i + 10), name: 'Pessoa de Teste', phone: '79999990009' })).response.status, 400, 'limite de números por reserva');
   assert.equal((await reserve(1, '79999990002')).response.status, 409, 'número não pode ser reservado duas vezes');
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -208,6 +210,34 @@ async function main() {
     pricePerNumberCents: 500, totalNumbers: 250, ...originalPix };
   const pixSettings = { pixKey: 'mae.maria@example.com', pixReceiverName: ' Mãe da Maria ', pixReceiverCity: ' Aracaju ' };
   const pixField = (id, value) => `${id}${String(value.length).padStart(2, '0')}${value}`;
+  for (const hours of [24, 48, 62, 86, 110]) {
+    assert.equal((await updateSettings({ ...initialSettings, reservationHours: hours })).response.status, 200);
+    assert.equal(Number((await client.execute({ sql: 'SELECT reservation_hours FROM raffles WHERE id = ?', args: [raffleId] })).rows[0].reservation_hours), hours);
+  }
+  for (const hours of [25, 63, '62', null]) {
+    const invalid = await updateSettings({ ...initialSettings, reservationHours: hours });
+    assert.equal(invalid.response.status, 400, 'API rejeita prazo fora das opções');
+    assert.match(invalid.body.error, /24, 48, 62, 86 ou 110/);
+  }
+  const timed = await reserve(8, '79999990408', '198.51.100.91');
+  assert.equal(timed.response.status, 200);
+  const deadlineRow = async () => (await client.execute({ sql: 'SELECT expires_at, created_at, status FROM reservations WHERE id = ?', args: [timed.body.reservationId] })).rows[0];
+  const timedRow = await deadlineRow();
+  assert.ok(Math.abs(Date.parse(timedRow.expires_at) - Date.parse(timedRow.created_at) - 110 * 3600000) < 60000, 'reserva usa prazo escolhido');
+  assert.equal((await updateSettings({ ...initialSettings, reservationHours: 48 })).response.status, 200);
+  assert.equal((await deadlineRow()).expires_at, timedRow.expires_at, 'alteração preserva vencimento de reservas existentes');
+  assert.equal((await updateSettings(initialSettings)).response.status, 200);
+  assert.equal(Number((await client.execute({ sql: 'SELECT reservation_hours FROM raffles WHERE id = ?', args: [raffleId] })).rows[0].reservation_hours), 48, 'clientes antigos preservam prazo ao omitir campo');
+  const timedPath = `/api/admin/${slug}/reservation/${timed.body.reservationId}`;
+  assert.equal((await request(base, timedPath, 'PATCH', { status: 'paid' }, cookie)).response.status, 200);
+  assert.equal((await deadlineRow()).expires_at, null, 'pagamento confirmado não expira');
+  assert.equal((await request(base, timedPath, 'PATCH', { status: 'pending' }, cookie)).response.status, 200);
+  assert.ok(Math.abs(Date.parse((await deadlineRow()).expires_at) - Date.now() - 48 * 3600000) < 60000, 'voltar a pendente usa prazo atual');
+  assert.equal((await request(base, `/api/${slug}/payment/${timed.body.reservationId}`, 'POST')).response.status, 200);
+  assert.equal((await updateSettings({ ...initialSettings, reservationHours: 62 })).response.status, 200);
+  assert.equal((await deadlineRow()).expires_at, null, 'aviso de pagamento continua sem expiração');
+  assert.equal((await deadlineRow()).status, 'payment_reported');
+  assert.equal((await request(base, timedPath, 'PATCH', { status: 'cancelled' }, cookie)).response.status, 200);
   assert.equal((await updateSettings({ ...initialSettings, pricePerNumberCents: -1 })).response.status, 400);
   assert.equal((await updateSettings({ ...initialSettings, drawDate: '2026-02-31' })).response.status, 400);
   assert.equal((await updateSettings({ ...initialSettings, totalNumbers: 1001 })).response.status, 400);

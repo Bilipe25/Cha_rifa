@@ -105,6 +105,16 @@ export async function runVisualCheck(base, slug, cookie, outputPrefix, options =
       assert.equal(metrics.frameHeight, metrics.viewportHeight, 'moldura preenche a altura');
       if (check.height <= 600) assert.ok(metrics.contentScroll > metrics.contentHeight, 'painel curto permite rolagem interna');
       if (check.path.includes('configuracoes')) {
+        const deadlineSelect = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
+          const select = document.querySelector('select[name="reservationHours"]');
+          select.scrollIntoView({ block: 'center' });
+          return { value: select.value, options: Array.from(select.options, option => option.value), height: select.getBoundingClientRect().height };
+        })()` });
+        assert.equal(deadlineSelect.result.value.value, '62', 'formulário mostra prazo salvo');
+        assert.deepEqual(deadlineSelect.result.value.options, ['24', '48', '62', '86', '110']);
+        assert.ok(deadlineSelect.result.value.height >= 44, 'seletor confortável para toque');
+        const deadlineShot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+        await writeFile(`${outputPrefix}-reservation-hours-${check.width}x${check.height}.png`, Buffer.from(deadlineShot.data, 'base64'));
         await send('Runtime.evaluate', { expression: "document.querySelector('.raffle-reset-button').click()" });
         await delay(100);
         const resetDialog = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {

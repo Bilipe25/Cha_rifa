@@ -12,6 +12,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     const error = field === 'pixKey' ? 'Confira o formato da chave Pix.'
       : field === 'pixReceiverCity' ? 'A cidade Pix precisa ter até 15 caracteres.'
       : field === 'pixReceiverName' ? 'O nome do recebedor Pix precisa ter até 25 caracteres.'
+      : field === 'reservationHours' ? 'Escolha um prazo de 24, 48, 62, 86 ou 110 horas.'
       : 'Confira a data, os valores e a quantidade (mínimo de 2 números).';
     return NextResponse.json({ error }, { status: 400 });
   }

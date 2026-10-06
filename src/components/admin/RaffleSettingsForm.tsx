@@ -8,6 +8,7 @@ import { formatMoney } from '@/lib/currency';
 import { normalizePixMerchantText } from '@/lib/pix-format';
 import { normalizePixKey } from '@/lib/pix-key';
 import { ResetRaffleButton } from '@/components/admin/ResetRaffleButton';
+import { RESERVATION_HOUR_OPTIONS } from '@/config/limits';
 
 type Settings = {
   drawDate: string;
@@ -15,6 +16,7 @@ type Settings = {
   prizeTwoCents: number;
   pricePerNumberCents: number;
   totalNumbers: number;
+  reservationHours: number;
   pixKey: string;
   pixReceiverName: string;
   pixReceiverCity: string;
@@ -38,6 +40,7 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
   const [prizeTwo, setPrizeTwo] = useState(formatMoney(initial.prizeTwoCents));
   const [price, setPrice] = useState(formatMoney(initial.pricePerNumberCents));
   const [quantity, setQuantity] = useState(String(initial.totalNumbers));
+  const [reservationHours, setReservationHours] = useState(initial.reservationHours);
   const [pixKey, setPixKey] = useState(initial.pixKey);
   const [pixReceiverName, setPixReceiverName] = useState(initial.pixReceiverName);
   const [pixReceiverCity, setPixReceiverCity] = useState(initial.pixReceiverCity);
@@ -73,6 +76,7 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
       prizeTwoCents: parseBrl(prizeTwo),
       pricePerNumberCents: parseBrl(price),
       totalNumbers: Number(quantity),
+      reservationHours,
       pixKey: normalizePixKey(pixKey),
       pixReceiverName: pixReceiverName.trim(),
       pixReceiverCity: pixReceiverCity.trim(),
@@ -83,6 +87,7 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
       return;
     }
     if (!values.pixKey) { setError('Confira a chave Pix. Use CPF/CNPJ, e-mail, celular ou chave aleatória em formato válido.'); return; }
+    if (!RESERVATION_HOUR_OPTIONS.some(hours => hours === reservationHours)) { setError('Escolha um prazo válido para as reservas.'); return; }
     const normalizedReceiver = normalizePixMerchantText(values.pixReceiverName);
     const normalizedCity = normalizePixMerchantText(values.pixReceiverCity);
     if (!normalizedReceiver || normalizedReceiver.length > 25) { setError('O nome do recebedor deve ter até 25 caracteres aceitos pelo Pix.'); return; }
@@ -144,6 +149,12 @@ export function RaffleSettingsForm({ slug, initial, hasReservations, drawn }: {
         <input type="number" min="2" max="1000" step="1" value={quantity} onChange={event => setQuantity(event.target.value)} required disabled={drawn || busy}/>
       </label>
       <p className="settings-help">Você pode ter de 2 a 1000 números. Números já reservados ou pagos ficam protegidos.</p>
+      <label className="field-label">Prazo para pagar a reserva
+        <select name="reservationHours" value={reservationHours} onChange={event => setReservationHours(Number(event.target.value))} required disabled={drawn || busy} aria-describedby="reservation-hours-help">
+          {RESERVATION_HOUR_OPTIONS.map(hours => <option key={hours} value={hours}>{hours} horas{hours === 62 ? ' (padrão)' : ''}</option>)}
+        </select>
+      </label>
+      <p className="settings-help" id="reservation-hours-help">Vale para novas reservas e para reservas marcadas novamente como pendentes. As reservas atuais mantêm o vencimento. Quando a pessoa informa que pagou, os números aguardam sua conferência e não expiram automaticamente.</p>
       <label className="field-label">Chave Pix
         <input type="text" autoCapitalize="none" spellCheck={false} maxLength={77} value={pixKey} onChange={event => setPixKey(event.target.value)} placeholder="CPF, e-mail, telefone ou chave aleatória" required disabled={drawn || busy}/>
       </label>

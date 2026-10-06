@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { client } from '@/db';
 import { normalizePixMerchantText } from '@/lib/pix-format';
 import { normalizePixKey } from '@/lib/pix-key';
+import { RESERVATION_HOUR_OPTIONS } from '@/config/limits';
 
 const pixReceiverField = (maxLength: number) => z.string().trim().min(1).max(maxLength)
   .refine(value => {
@@ -17,6 +18,7 @@ export const raffleSettingsSchema = z.object({
   prizeTwoCents: z.number().int().min(0).max(1_000_000_000),
   pricePerNumberCents: z.number().int().min(1).max(1_000_000_000),
   totalNumbers: z.number().int().min(2).max(1000),
+  reservationHours: z.number().int().refine(hours => RESERVATION_HOUR_OPTIONS.some(option => option === hours)).optional(),
   pixKey: z.string().trim().min(1).max(77).refine(value => normalizePixKey(value) !== null).transform(value => normalizePixKey(value)!),
   pixReceiverName: pixReceiverField(25),
   // Existing campaigns may still carry a longer city from the original seed.
@@ -34,7 +36,7 @@ export async function updateRaffleSettings(raffleId: string, input: RaffleSettin
   const transaction = await client.transaction('write');
   try {
     const result = await transaction.execute({
-      sql: 'SELECT status, total_numbers, pix_key, pix_receiver_name, pix_receiver_city FROM raffles WHERE id = ?',
+      sql: 'SELECT status, total_numbers, reservation_hours, pix_key, pix_receiver_name, pix_receiver_city FROM raffles WHERE id = ?',
       args: [raffleId],
     });
     const raffle = result.rows[0];
@@ -92,10 +94,10 @@ export async function updateRaffleSettings(raffleId: string, input: RaffleSettin
 
     await transaction.execute({
       sql: `UPDATE raffles SET draw_date = ?, prize_one_cents = ?, prize_two_cents = ?,
-            price_per_number_cents = ?, total_numbers = ?, pix_key = ?, pix_receiver_name = ?, pix_receiver_city = ?
+            price_per_number_cents = ?, total_numbers = ?, reservation_hours = ?, pix_key = ?, pix_receiver_name = ?, pix_receiver_city = ?
             WHERE id = ? AND status != 'drawn'`,
       args: [settings.drawDate, settings.prizeOneCents, settings.prizeTwoCents,
-        settings.pricePerNumberCents, nextTotal, settings.pixKey, settings.pixReceiverName, settings.pixReceiverCity, raffleId],
+        settings.pricePerNumberCents, nextTotal, settings.reservationHours ?? Number(raffle.reservation_hours), settings.pixKey, settings.pixReceiverName, settings.pixReceiverCity, raffleId],
     });
     await transaction.commit();
   } catch (error) {

@@ -74,7 +74,7 @@ export async function setReservationStatus(raffleId: string, reservationId: stri
     });
     if (!result.rows.length || result.rows[0].status === 'cancelled') throw new Error('Reserva indisponível');
     const currentStatus = String(result.rows[0].status);
-    const raffle = await transaction.execute({ sql: 'SELECT status FROM raffles WHERE id = ?', args: [raffleId] });
+    const raffle = await transaction.execute({ sql: 'SELECT status, reservation_hours FROM raffles WHERE id = ?', args: [raffleId] });
     if (raffle.rows[0]?.status === 'drawn') throw new Error('Sorteio concluído: pagamentos não podem mais ser alterados.');
     if (currentStatus === status) { await transaction.commit(); return; }
     const drawn = await transaction.execute({
@@ -93,7 +93,7 @@ export async function setReservationStatus(raffleId: string, reservationId: stri
             payment_reported_at = CASE WHEN ? = 'pending' THEN NULL ELSE payment_reported_at END
             WHERE id = ? AND raffle_id = ?`,
       args: [status, status === 'paid' ? now : null, status === 'cancelled' ? now : null,
-        status === 'cancelled' ? 'manual' : null, status === 'pending' ? reservationDeadline() : null,
+        status === 'cancelled' ? 'manual' : null, status === 'pending' ? reservationDeadline(Number(raffle.rows[0].reservation_hours)) : null,
         status, reservationId, raffleId],
     });
     await transaction.execute({

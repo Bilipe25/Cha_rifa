@@ -4,7 +4,7 @@
 * { box-sizing:border-box; }
 html { font-size:16px; }
 body { margin:0; min-height:100dvh; display:flex; justify-content:center; align-items:flex-start; background:linear-gradient(90deg,#f9dce7,#fff6f9 27%,#fff6f9 73%,#f9dce7); color:var(--brown); font-family:"Nunito","Trebuchet MS",ui-rounded,system-ui,sans-serif; }
-button,input,textarea { font:inherit; }
+button,input,textarea,select { font:inherit; }
 button,a { -webkit-tap-highlight-color:transparent; }
 button { cursor:pointer; }
 button:disabled { cursor:not-allowed; }
@@ -66,8 +66,8 @@ button:disabled { cursor:not-allowed; }
 .reservation-recap>div { border-top:1px solid #f4d4df; margin-top:2%; padding-top:2%; display:flex; justify-content:space-between; font-size:16px; }
 .reservation-recap b,.pix-recap strong { color:#ad2b5c; font-size:22px; }
 .field-label { display:flex; flex-direction:column; gap:5px; margin-bottom:3.2%; font-size:14px; font-weight:800; }
-.field-label input { width:100%; min-height:46px; padding:10px 13px; border:1.5px solid #f1bed0; border-radius:13px; background:#fff; color:var(--brown); font-size:16px; outline:none; }
-.field-label input:focus { border-color:#ce5b8a; box-shadow:0 0 0 3px #f8d4e2; }
+.field-label input,.field-label select { width:100%; min-height:46px; padding:10px 13px; border:1.5px solid #f1bed0; border-radius:13px; background:#fff; color:var(--brown); font-size:16px; outline:none; }
+.field-label input:focus,.field-label select:focus { border-color:#ce5b8a; box-shadow:0 0 0 3px #f8d4e2; }
 .field-label input::placeholder { color:#947d82; }
 .pix-info { display:flex; gap:9px; padding:3.5%; margin:3% 0 4%; border-radius:16px; background:#fdf0f7; color:#bd4777; }
 .pix-info div { flex:1; }
@@ -163,7 +163,7 @@ button:disabled { cursor:not-allowed; }
 .settings-panel .panel-heading p { margin-top:5px; }
 .settings-form { display:flex; flex-direction:column; gap:5px; }
 .settings-form .field-label { margin-bottom:5px; }
-.settings-form input:disabled { background:#f6edf0; color:#715c65; }
+.settings-form input:disabled,.settings-form select:disabled { background:#f6edf0; color:#715c65; }
 .settings-prizes { display:grid; grid-template-columns:1fr; gap:5px; }
 .settings-help { margin:-2px 0 8px; color:#704b5a; font-size:12px; line-height:1.4; }
 .settings-form>.primary-button { margin-top:5px; min-height:48px; font-size:15px; }

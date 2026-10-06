@@ -38,7 +38,7 @@ export async function createReservation(slug: string, numbers: number[], partici
   const transaction = await client.transaction('write');
   try {
     const current = await transaction.execute({
-      sql: 'SELECT status, total_numbers, price_per_number_cents, pix_key, pix_receiver_name, pix_receiver_city FROM raffles WHERE id = ?',
+      sql: 'SELECT status, total_numbers, reservation_hours, price_per_number_cents, pix_key, pix_receiver_name, pix_receiver_city FROM raffles WHERE id = ?',
       args: [raffle.id],
     });
     const liveRaffle = current.rows[0];
@@ -67,7 +67,7 @@ export async function createReservation(slug: string, numbers: number[], partici
     await transaction.execute({
       sql: `INSERT INTO reservations (id, raffle_id, participant_name, phone, phone_normalized, status, total_cents, pix_txid, pix_payload, expires_at, created_at)
             VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
-      args: [id, raffle.id, participantName.trim(), formatPhone(phone), normalizePhone(phone), totalCents, txid, pixPayload, reservationDeadline(), now],
+      args: [id, raffle.id, participantName.trim(), formatPhone(phone), normalizePhone(phone), totalCents, txid, pixPayload, reservationDeadline(Number(liveRaffle.reservation_hours)), now],
     });
     for (const number of uniqueNumbers) {
       const updated = await transaction.execute({

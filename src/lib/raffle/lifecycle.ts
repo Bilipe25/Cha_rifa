@@ -3,10 +3,11 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 
 import { client } from '@/db';
+import { RESERVATION_HOURS } from '@/config/limits';
 
 export async function expirePendingReservations(raffleId: string) {
   const now = new Date().toISOString();
-  const legacyDeadline = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const legacyDeadline = new Date(Date.now() - RESERVATION_HOURS * 60 * 60 * 1000).toISOString();
   const due = await client.execute({
     sql: `SELECT id FROM reservations WHERE raffle_id = ? AND status = 'pending' AND
           (expires_at <= ? OR (expires_at IS NULL AND created_at <= ?)) LIMIT 200`,

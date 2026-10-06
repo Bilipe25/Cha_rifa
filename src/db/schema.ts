@@ -1,4 +1,5 @@
 import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { RESERVATION_HOURS } from '../config/limits';
 
 export const raffles = sqliteTable('raffles', {
   id: text('id').primaryKey(),
@@ -9,6 +10,7 @@ export const raffles = sqliteTable('raffles', {
   drawDate: text('draw_date').notNull(),
   pricePerNumberCents: integer('price_per_number_cents').notNull(),
   totalNumbers: integer('total_numbers').notNull(),
+  reservationHours: integer('reservation_hours').notNull().default(RESERVATION_HOURS),
   prizeOneCents: integer('prize_one_cents').notNull(),
   prizeTwoCents: integer('prize_two_cents').notNull(),
   pixKey: text('pix_key'),
